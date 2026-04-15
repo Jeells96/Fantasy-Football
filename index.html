@@ -617,14 +617,28 @@ function renderDraftBoard() {
   const numRounds = upcomingDraft?.settings?.rounds || 5;
   const snakeOrder = state.draftOrder; // roster_ids in pick 1..N order
 
-  // tradedPicks for this year: map original_roster_id+round -> current owner
-  const tradeMap = {};
-  state.tradedPicks
-    .filter(p => p.season === draftYear)
-    .forEach(p => {
-      const key = `${p.previous_owner_id}_${p.round}`;
-      tradeMap[key] = p.owner_id;
-    });
+  // Build a chain resolver for this year's traded picks.
+  // Sleeper stores each trade as {roster_id (original slot owner), previous_owner_id, owner_id}.
+  // For multi-hop trades we need to follow: origSlot -> A -> B -> C (current owner).
+  // Strategy: for each pick slot (roster_id + round), find the trade where roster_id matches
+  // the slot, then keep following owner_id through subsequent trades until no more hops exist.
+
+  const yearPicks = state.tradedPicks.filter(p => p.season === draftYear);
+
+  function resolveOwner(origRosterId, round) {
+    // Find all trades for this round
+    const roundTrades = yearPicks.filter(p => p.round === round);
+    // Walk the chain: start at origRosterId, keep finding who they traded TO
+    let current = String(origRosterId);
+    let maxHops = 20; // safety valve
+    while (maxHops-- > 0) {
+      // Find a trade where previous_owner_id === current (meaning current traded it away)
+      const next = roundTrades.find(p => String(p.previous_owner_id) === current);
+      if (!next) break;
+      current = String(next.owner_id);
+    }
+    return current;
+  }
 
   // Build full board
   let html = `<div class="section-label">${draftYear} Draft — ${numRounds} Rounds</div>`;
@@ -637,10 +651,8 @@ function renderDraftBoard() {
     const roundOrder = isSnake ? [...snakeOrder].reverse() : snakeOrder;
 
     roundOrder.forEach((origRosterId, idx) => {
-      const pickNum = (round - 1) * snakeOrder.length + idx + 1;
       const overallPick = `${round}.${String(idx+1).padStart(2,'0')}`;
-      const key = `${origRosterId}_${round}`;
-      const currentOwner = tradeMap[key] ? String(tradeMap[key]) : String(origRosterId);
+      const currentOwner = resolveOwner(origRosterId, round);
       const origName = state.ownerMap[origRosterId] || `Roster ${origRosterId}`;
       const curName = state.ownerMap[currentOwner] || `Roster ${currentOwner}`;
       const isSame = currentOwner === String(origRosterId);
