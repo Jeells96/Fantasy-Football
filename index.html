@@ -1,1 +1,689 @@
+<!DOCTYPE html>
 
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dynasty Pick Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap');
+
+:root {
+–bg: #0a0d12;
+–surface: #111520;
+–card: #161c2a;
+–border: #1e2740;
+–accent: #e8c84a;
+–accent2: #4a9de8;
+–text: #e8eaf0;
+–muted: #5a6280;
+–danger: #e84a6a;
+–green: #4ae8a0;
+}
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘DM Sans’, sans-serif;
+min-height: 100vh;
+padding: 0 0 60px;
+}
+
+/* Header */
+.header {
+background: linear-gradient(135deg, #0a0d12 0%, #111a2e 100%);
+border-bottom: 1px solid var(–border);
+padding: 24px 20px 20px;
+position: sticky;
+top: 0;
+z-index: 100;
+}
+
+.header-top {
+display: flex;
+align-items: baseline;
+gap: 10px;
+margin-bottom: 4px;
+}
+
+.header h1 {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 2rem;
+letter-spacing: 2px;
+color: var(–accent);
+line-height: 1;
+}
+
+.league-name {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.7rem;
+color: var(–muted);
+letter-spacing: 1px;
+text-transform: uppercase;
+}
+
+.tabs {
+display: flex;
+gap: 6px;
+margin-top: 14px;
+flex-wrap: wrap;
+}
+
+.tab {
+background: none;
+border: 1px solid var(–border);
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+font-size: 0.7rem;
+letter-spacing: 1px;
+text-transform: uppercase;
+padding: 6px 14px;
+border-radius: 2px;
+cursor: pointer;
+transition: all 0.15s;
+}
+
+.tab.active {
+background: var(–accent);
+border-color: var(–accent);
+color: #000;
+font-weight: 500;
+}
+
+.tab:not(.active):hover {
+border-color: var(–accent);
+color: var(–accent);
+}
+
+/* Content */
+.content { padding: 20px 16px; }
+
+/* Loading / Error */
+.status {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+padding: 60px 20px;
+gap: 12px;
+}
+
+.spinner {
+width: 32px; height: 32px;
+border: 2px solid var(–border);
+border-top-color: var(–accent);
+border-radius: 50%;
+animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status p {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.75rem;
+color: var(–muted);
+letter-spacing: 1px;
+}
+
+/* Section label */
+.section-label {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+letter-spacing: 2px;
+text-transform: uppercase;
+color: var(–muted);
+margin-bottom: 10px;
+margin-top: 22px;
+}
+
+.section-label:first-child { margin-top: 0; }
+
+/* Pick cards */
+.picks-grid {
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+.pick-card {
+background: var(–card);
+border: 1px solid var(–border);
+border-radius: 4px;
+padding: 12px 14px;
+display: grid;
+grid-template-columns: 56px 1fr auto;
+align-items: center;
+gap: 12px;
+animation: fadeUp 0.3s ease both;
+}
+
+@keyframes fadeUp {
+from { opacity: 0; transform: translateY(8px); }
+to { opacity: 1; transform: translateY(0); }
+}
+
+.pick-badge {
+text-align: center;
+}
+
+.pick-year {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 1.4rem;
+color: var(–accent);
+line-height: 1;
+}
+
+.pick-round {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+color: var(–muted);
+letter-spacing: 1px;
+}
+
+.pick-info {}
+
+.pick-owner {
+font-size: 0.85rem;
+font-weight: 600;
+color: var(–text);
+margin-bottom: 3px;
+}
+
+.pick-origin {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+color: var(–muted);
+letter-spacing: 0.5px;
+}
+
+.pick-origin span { color: var(–accent2); }
+
+.pick-type {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.6rem;
+letter-spacing: 1px;
+text-transform: uppercase;
+padding: 3px 8px;
+border-radius: 2px;
+border: 1px solid;
+}
+
+.pick-type.traded {
+color: var(–danger);
+border-color: var(–danger);
+background: rgba(232,74,106,0.08);
+}
+
+.pick-type.kept {
+color: var(–green);
+border-color: var(–green);
+background: rgba(74,232,160,0.08);
+}
+
+/* Draft order input */
+.draft-input-section {
+background: var(–card);
+border: 1px solid var(–border);
+border-radius: 4px;
+padding: 16px;
+margin-bottom: 20px;
+}
+
+.draft-input-section h3 {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 1.1rem;
+letter-spacing: 1px;
+color: var(–accent);
+margin-bottom: 6px;
+}
+
+.draft-input-section p {
+font-size: 0.75rem;
+color: var(–muted);
+margin-bottom: 12px;
+line-height: 1.5;
+}
+
+.order-list {
+display: flex;
+flex-direction: column;
+gap: 6px;
+margin-bottom: 14px;
+}
+
+.order-row {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+.order-num {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 1.1rem;
+color: var(–accent);
+width: 22px;
+text-align: right;
+flex-shrink: 0;
+}
+
+.order-select {
+flex: 1;
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 3px;
+color: var(–text);
+font-family: ‘DM Sans’, sans-serif;
+font-size: 0.8rem;
+padding: 7px 10px;
+appearance: none;
+-webkit-appearance: none;
+}
+
+.order-select:focus {
+outline: none;
+border-color: var(–accent);
+}
+
+.btn {
+background: var(–accent);
+color: #000;
+border: none;
+border-radius: 3px;
+font-family: ‘DM Mono’, monospace;
+font-size: 0.7rem;
+font-weight: 500;
+letter-spacing: 1px;
+text-transform: uppercase;
+padding: 10px 20px;
+cursor: pointer;
+transition: opacity 0.15s;
+width: 100%;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Full draft board */
+.draft-board {
+overflow-x: auto;
+}
+
+.board-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 0.78rem;
+}
+
+.board-table th {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.6rem;
+letter-spacing: 1.5px;
+text-transform: uppercase;
+color: var(–muted);
+padding: 8px 10px;
+text-align: left;
+border-bottom: 1px solid var(–border);
+}
+
+.board-table td {
+padding: 10px 10px;
+border-bottom: 1px solid rgba(30,39,64,0.5);
+vertical-align: middle;
+}
+
+.board-table tr:last-child td { border-bottom: none; }
+
+.board-table .pick-num {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 1.1rem;
+color: var(–accent);
+width: 40px;
+}
+
+.board-table .team-cell {
+font-weight: 600;
+color: var(–text);
+}
+
+.board-table .origin-cell {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+color: var(–accent2);
+}
+
+.board-table .same { color: var(–muted); }
+
+.round-header td {
+background: var(–surface);
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 0.9rem;
+letter-spacing: 2px;
+color: var(–muted);
+padding: 8px 10px;
+border-bottom: 1px solid var(–border);
+}
+
+/* filter bar */
+.filter-bar {
+display: flex;
+gap: 6px;
+margin-bottom: 14px;
+flex-wrap: wrap;
+}
+
+.filter-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+letter-spacing: 1px;
+text-transform: uppercase;
+padding: 5px 12px;
+border-radius: 2px;
+cursor: pointer;
+transition: all 0.15s;
+}
+
+.filter-btn.active {
+background: var(–accent2);
+border-color: var(–accent2);
+color: #000;
+}
+
+.empty {
+text-align: center;
+padding: 40px 20px;
+font-family: ‘DM Mono’, monospace;
+font-size: 0.75rem;
+color: var(–muted);
+letter-spacing: 1px;
+}
+
+.error-msg {
+background: rgba(232,74,106,0.1);
+border: 1px solid var(–danger);
+border-radius: 4px;
+padding: 12px 16px;
+font-size: 0.8rem;
+color: var(–danger);
+margin: 20px 0;
+}
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <h1>Pick Tracker</h1>
+    <span class="league-name" id="leagueName">Loading...</span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('traded')">Traded Picks</button>
+    <button class="tab" onclick="showTab('board')">Draft Board</button>
+  </div>
+</div>
+
+<div class="content" id="mainContent">
+  <div class="status"><div class="spinner"></div><p>Fetching league data...</p></div>
+</div>
+
+<script>
+const LEAGUE_ID = '1330745662001659904';
+let state = {
+  league: null,
+  users: [],
+  rosters: [],
+  tradedPicks: [],
+  drafts: [],
+  ownerMap: {},   // roster_id -> display_name
+  draftOrder: [], // array of roster_ids in snake order (set by user)
+  activeTab: 'traded',
+  filterYear: 'all',
+  filterTeam: 'all',
+};
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function init() {
+  try {
+    const [league, users, rosters, tradedPicks, drafts] = await Promise.all([
+      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}`),
+      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/users`),
+      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`),
+      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/traded_picks`),
+      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/drafts`),
+    ]);
+
+    state.league = league;
+    state.users = users;
+    state.rosters = rosters;
+    state.tradedPicks = tradedPicks;
+    state.drafts = drafts;
+
+    // Build owner map: roster_id -> team name / display name
+    const userById = {};
+    users.forEach(u => { userById[u.user_id] = u; });
+
+    rosters.forEach(r => {
+      const u = userById[r.owner_id];
+      const teamName = u?.metadata?.team_name || u?.display_name || `Team ${r.roster_id}`;
+      state.ownerMap[r.roster_id] = teamName;
+    });
+
+    document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
+    renderTab();
+  } catch (e) {
+    document.getElementById('mainContent').innerHTML =
+      `<div class="error-msg">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function showTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['traded','board'][i] === tab);
+  });
+  renderTab();
+}
+
+function renderTab() {
+  if (state.activeTab === 'traded') renderTradedPicks();
+  else renderDraftBoard();
+}
+
+// ─── TRADED PICKS TAB ─────────────────────────────────────────────────────────
+
+function renderTradedPicks() {
+  const picks = state.tradedPicks;
+  const years = [...new Set(picks.map(p => p.season))].sort();
+  const teams = Object.entries(state.ownerMap).sort((a,b) => a[1].localeCompare(b[1]));
+
+  // Filter
+  let filtered = picks;
+  if (state.filterYear !== 'all') filtered = filtered.filter(p => p.season === state.filterYear);
+  if (state.filterTeam !== 'all') filtered = filtered.filter(p => String(p.owner_id) === state.filterTeam);
+
+  // Group by year then round
+  const grouped = {};
+  filtered.forEach(p => {
+    if (!grouped[p.season]) grouped[p.season] = {};
+    if (!grouped[p.season][p.round]) grouped[p.season][p.round] = [];
+    grouped[p.season][p.round].push(p);
+  });
+
+  const yearFilters = `
+    <div class="filter-bar">
+      <button class="filter-btn ${state.filterYear==='all'?'active':''}" onclick="setFilter('year','all')">All Years</button>
+      ${years.map(y => `<button class="filter-btn ${state.filterYear===y?'active':''}" onclick="setFilter('year','${y}')">${y}</button>`).join('')}
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn ${state.filterTeam==='all'?'active':''}" onclick="setFilter('team','all')">All Teams</button>
+      ${teams.map(([rid,name]) => `<button class="filter-btn ${state.filterTeam===rid?'active':''}" onclick="setFilter('team','${rid}')">${name}</button>`).join('')}
+    </div>
+  `;
+
+  if (!filtered.length) {
+    document.getElementById('mainContent').innerHTML = yearFilters + `<div class="empty">No traded picks found</div>`;
+    return;
+  }
+
+  let html = yearFilters + '<div class="picks-grid">';
+
+  Object.keys(grouped).sort().forEach(year => {
+    html += `<div class="section-label">${year} Season</div>`;
+    Object.keys(grouped[year]).sort((a,b)=>a-b).forEach(round => {
+      grouped[year][round]
+        .sort((a,b) => (state.ownerMap[a.owner_id]||'').localeCompare(state.ownerMap[b.owner_id]||''))
+        .forEach((p, i) => {
+          const ownerName = state.ownerMap[p.owner_id] || `Roster ${p.owner_id}`;
+          const origName = state.ownerMap[p.previous_owner_id] || `Roster ${p.previous_owner_id}`;
+          const isSameOwner = p.owner_id === p.previous_owner_id;
+          const delay = i * 30;
+          html += `
+            <div class="pick-card" style="animation-delay:${delay}ms">
+              <div class="pick-badge">
+                <div class="pick-year">${year}</div>
+                <div class="pick-round">RD ${round}</div>
+              </div>
+              <div class="pick-info">
+                <div class="pick-owner">${ownerName}</div>
+                <div class="pick-origin">
+                  ${isSameOwner ? 'Original pick' : `From <span>${origName}</span>`}
+                </div>
+              </div>
+              <div class="pick-type ${isSameOwner?'kept':'traded'}">${isSameOwner?'OWN':'TRADED'}</div>
+            </div>`;
+        });
+    });
+  });
+
+  html += '</div>';
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function setFilter(type, val) {
+  if (type === 'year') state.filterYear = val;
+  if (type === 'team') state.filterTeam = val;
+  renderTab();
+}
+
+// ─── DRAFT BOARD TAB ──────────────────────────────────────────────────────────
+
+function renderDraftBoard() {
+  const numTeams = state.rosters.length;
+  const teams = Object.entries(state.ownerMap).sort((a,b)=>+a[0]-+b[0]);
+
+  // If no draft order set yet, show input form
+  if (state.draftOrder.length === 0) {
+    let selects = '';
+    for (let i = 1; i <= numTeams; i++) {
+      selects += `
+        <div class="order-row">
+          <div class="order-num">${i}</div>
+          <select class="order-select" id="pick${i}">
+            <option value="">— Select Team —</option>
+            ${teams.map(([rid,name]) => `<option value="${rid}">${name}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+
+    document.getElementById('mainContent').innerHTML = `
+      <div class="draft-input-section">
+        <h3>Original Draft Order</h3>
+        <p>Enter the pre-trade draft order (pick 1 → pick ${numTeams}) so I can calculate who actually gets each pick after all trades.</p>
+        <div class="order-list">${selects}</div>
+        <button class="btn" onclick="submitDraftOrder()">Calculate Pick Board</button>
+      </div>`;
+    return;
+  }
+
+  // Build the board
+  // For traded picks: build a lookup of who owns each (year, round, original roster_id)
+  // We need the upcoming draft's year
+  const upcomingDraft = state.drafts
+    .filter(d => d.status !== 'complete')
+    .sort((a,b) => (a.created||0) - (b.created||0))[0]
+    || state.drafts.sort((a,b) => (b.created||0) - (a.created||0))[0];
+
+  const draftYear = upcomingDraft?.season || String(new Date().getFullYear());
+  const numRounds = upcomingDraft?.settings?.rounds || 5;
+  const snakeOrder = state.draftOrder; // roster_ids in pick 1..N order
+
+  // tradedPicks for this year: map original_roster_id+round -> current owner
+  const tradeMap = {};
+  state.tradedPicks
+    .filter(p => p.season === draftYear)
+    .forEach(p => {
+      const key = `${p.previous_owner_id}_${p.round}`;
+      tradeMap[key] = p.owner_id;
+    });
+
+  // Build full board
+  let html = `<div class="section-label">${draftYear} Draft — ${numRounds} Rounds</div>`;
+  html += '<div class="draft-board"><table class="board-table">';
+  html += '<thead><tr><th>#</th><th>Pick Goes To</th><th>Original From</th></tr></thead><tbody>';
+
+  for (let round = 1; round <= numRounds; round++) {
+    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
+    const isSnake = round % 2 === 0;
+    const roundOrder = isSnake ? [...snakeOrder].reverse() : snakeOrder;
+
+    roundOrder.forEach((origRosterId, idx) => {
+      const pickNum = (round - 1) * snakeOrder.length + idx + 1;
+      const overallPick = `${round}.${String(idx+1).padStart(2,'0')}`;
+      const key = `${origRosterId}_${round}`;
+      const currentOwner = tradeMap[key] ? String(tradeMap[key]) : String(origRosterId);
+      const origName = state.ownerMap[origRosterId] || `Roster ${origRosterId}`;
+      const curName = state.ownerMap[currentOwner] || `Roster ${currentOwner}`;
+      const isSame = currentOwner === String(origRosterId);
+
+      html += `<tr>
+        <td class="pick-num">${overallPick}</td>
+        <td class="team-cell">${curName}</td>
+        <td class="origin-cell ${isSame?'same':''}">${isSame ? '—' : origName}</td>
+      </tr>`;
+    });
+  }
+
+  html += '</tbody></table></div>';
+  html += `<button class="btn" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="state.draftOrder=[];renderTab()">Reset Order</button>`;
+
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function submitDraftOrder() {
+  const numTeams = state.rosters.length;
+  const order = [];
+  const seen = new Set();
+
+  for (let i = 1; i <= numTeams; i++) {
+    const val = document.getElementById(`pick${i}`)?.value;
+    if (!val) {
+      alert(`Please select a team for pick ${i}`);
+      return;
+    }
+    if (seen.has(val)) {
+      alert(`${state.ownerMap[val]} is selected more than once`);
+      return;
+    }
+    seen.add(val);
+    order.push(val);
+  }
+
+  state.draftOrder = order;
+  renderTab();
+}
+
+init();
+</script>
+
+</body>
+</html>
