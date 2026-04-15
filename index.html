@@ -31,7 +31,6 @@ min-height: 100vh;
 padding: 0 0 60px;
 }
 
-/* Header */
 .header {
 background: linear-gradient(135deg, #0a0d12 0%, #111a2e 100%);
 border-bottom: 1px solid var(–border);
@@ -41,12 +40,7 @@ top: 0;
 z-index: 100;
 }
 
-.header-top {
-display: flex;
-align-items: baseline;
-gap: 10px;
-margin-bottom: 4px;
-}
+.header-top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
 
 .header h1 {
 font-family: ‘Bebas Neue’, sans-serif;
@@ -64,12 +58,7 @@ letter-spacing: 1px;
 text-transform: uppercase;
 }
 
-.tabs {
-display: flex;
-gap: 6px;
-margin-top: 14px;
-flex-wrap: wrap;
-}
+.tabs { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
 
 .tab {
 background: none;
@@ -85,29 +74,14 @@ cursor: pointer;
 transition: all 0.15s;
 }
 
-.tab.active {
-background: var(–accent);
-border-color: var(–accent);
-color: #000;
-font-weight: 500;
-}
+.tab.active { background: var(–accent); border-color: var(–accent); color: #000; font-weight: 500; }
+.tab:not(.active):hover { border-color: var(–accent); color: var(–accent); }
 
-.tab:not(.active):hover {
-border-color: var(–accent);
-color: var(–accent);
-}
-
-/* Content */
 .content { padding: 20px 16px; }
 
-/* Loading / Error */
 .status {
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-padding: 60px 20px;
-gap: 12px;
+display: flex; flex-direction: column; align-items: center;
+justify-content: center; padding: 60px 20px; gap: 12px;
 }
 
 .spinner {
@@ -127,7 +101,6 @@ color: var(–muted);
 letter-spacing: 1px;
 }
 
-/* Section label */
 .section-label {
 font-family: ‘DM Mono’, monospace;
 font-size: 0.65rem;
@@ -138,14 +111,9 @@ margin-bottom: 10px;
 margin-top: 22px;
 }
 
-.section-label:first-child { margin-top: 0; }
+.section-label:first-of-type { margin-top: 0; }
 
-/* Pick cards */
-.picks-grid {
-display: flex;
-flex-direction: column;
-gap: 8px;
-}
+.picks-grid { display: flex; flex-direction: column; gap: 8px; }
 
 .pick-card {
 background: var(–card);
@@ -164,15 +132,12 @@ from { opacity: 0; transform: translateY(8px); }
 to { opacity: 1; transform: translateY(0); }
 }
 
-.pick-badge {
-text-align: center;
-}
-
 .pick-year {
 font-family: ‘Bebas Neue’, sans-serif;
 font-size: 1.4rem;
 color: var(–accent);
 line-height: 1;
+text-align: center;
 }
 
 .pick-round {
@@ -180,16 +145,10 @@ font-family: ‘DM Mono’, monospace;
 font-size: 0.65rem;
 color: var(–muted);
 letter-spacing: 1px;
+text-align: center;
 }
 
-.pick-info {}
-
-.pick-owner {
-font-size: 0.85rem;
-font-weight: 600;
-color: var(–text);
-margin-bottom: 3px;
-}
+.pick-owner { font-size: 0.85rem; font-weight: 600; color: var(–text); margin-bottom: 3px; }
 
 .pick-origin {
 font-family: ‘DM Mono’, monospace;
@@ -210,19 +169,59 @@ border-radius: 2px;
 border: 1px solid;
 }
 
-.pick-type.traded {
-color: var(–danger);
-border-color: var(–danger);
-background: rgba(232,74,106,0.08);
+.pick-type.traded { color: var(–danger); border-color: var(–danger); background: rgba(232,74,106,0.08); }
+.pick-type.kept { color: var(–green); border-color: var(–green); background: rgba(74,232,160,0.08); }
+
+.filter-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+
+.filter-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+font-size: 0.65rem;
+letter-spacing: 1px;
+text-transform: uppercase;
+padding: 5px 12px;
+border-radius: 2px;
+cursor: pointer;
+transition: all 0.15s;
 }
 
-.pick-type.kept {
-color: var(–green);
-border-color: var(–green);
-background: rgba(74,232,160,0.08);
+.filter-btn.active { background: var(–accent2); border-color: var(–accent2); color: #000; }
+
+.draft-board { overflow-x: auto; }
+
+.board-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+
+.board-table th {
+font-family: ‘DM Mono’, monospace;
+font-size: 0.6rem;
+letter-spacing: 1.5px;
+text-transform: uppercase;
+color: var(–muted);
+padding: 8px 10px;
+text-align: left;
+border-bottom: 1px solid var(–border);
 }
 
-/* Draft order input */
+.board-table td { padding: 10px 10px; border-bottom: 1px solid rgba(30,39,64,0.5); vertical-align: middle; }
+.board-table tr:last-child td { border-bottom: none; }
+.board-table .pick-num { font-family: ‘Bebas Neue’, sans-serif; font-size: 1.1rem; color: var(–accent); width: 40px; }
+.board-table .team-cell { font-weight: 600; color: var(–text); }
+.board-table .origin-cell { font-family: ‘DM Mono’, monospace; font-size: 0.65rem; color: var(–accent2); }
+.board-table .same { color: var(–muted); }
+
+.round-header td {
+background: var(–surface);
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 0.9rem;
+letter-spacing: 2px;
+color: var(–muted);
+padding: 8px 10px;
+border-bottom: 1px solid var(–border);
+}
+
 .draft-input-section {
 background: var(–card);
 border: 1px solid var(–border);
@@ -239,25 +238,10 @@ color: var(–accent);
 margin-bottom: 6px;
 }
 
-.draft-input-section p {
-font-size: 0.75rem;
-color: var(–muted);
-margin-bottom: 12px;
-line-height: 1.5;
-}
+.draft-input-section p { font-size: 0.75rem; color: var(–muted); margin-bottom: 12px; line-height: 1.5; }
 
-.order-list {
-display: flex;
-flex-direction: column;
-gap: 6px;
-margin-bottom: 14px;
-}
-
-.order-row {
-display: flex;
-align-items: center;
-gap: 10px;
-}
+.order-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.order-row { display: flex; align-items: center; gap: 10px; }
 
 .order-num {
 font-family: ‘Bebas Neue’, sans-serif;
@@ -281,10 +265,7 @@ appearance: none;
 -webkit-appearance: none;
 }
 
-.order-select:focus {
-outline: none;
-border-color: var(–accent);
-}
+.order-select:focus { outline: none; border-color: var(–accent); }
 
 .btn {
 background: var(–accent);
@@ -303,103 +284,24 @@ width: 100%;
 }
 
 .btn:hover { opacity: 0.85; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Full draft board */
-.draft-board {
-overflow-x: auto;
-}
-
-.board-table {
-width: 100%;
-border-collapse: collapse;
-font-size: 0.78rem;
-}
-
-.board-table th {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.6rem;
-letter-spacing: 1.5px;
-text-transform: uppercase;
-color: var(–muted);
-padding: 8px 10px;
-text-align: left;
-border-bottom: 1px solid var(–border);
-}
-
-.board-table td {
-padding: 10px 10px;
-border-bottom: 1px solid rgba(30,39,64,0.5);
-vertical-align: middle;
-}
-
-.board-table tr:last-child td { border-bottom: none; }
-
-.board-table .pick-num {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 1.1rem;
-color: var(–accent);
-width: 40px;
-}
-
-.board-table .team-cell {
-font-weight: 600;
-color: var(–text);
-}
-
-.board-table .origin-cell {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-color: var(–accent2);
-}
-
-.board-table .same { color: var(–muted); }
-
-.round-header td {
-background: var(–surface);
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 0.9rem;
-letter-spacing: 2px;
-color: var(–muted);
-padding: 8px 10px;
-border-bottom: 1px solid var(–border);
-}
-
-/* filter bar */
-.filter-bar {
-display: flex;
-gap: 6px;
-margin-bottom: 14px;
-flex-wrap: wrap;
-}
-
-.filter-btn {
+.btn-ghost {
 background: none;
 border: 1px solid var(–border);
 color: var(–muted);
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-letter-spacing: 1px;
-text-transform: uppercase;
-padding: 5px 12px;
-border-radius: 2px;
-cursor: pointer;
-transition: all 0.15s;
+margin-top: 12px;
 }
 
-.filter-btn.active {
-background: var(–accent2);
-border-color: var(–accent2);
-color: #000;
-}
-
-.empty {
-text-align: center;
-padding: 40px 20px;
+.info-banner {
+background: rgba(74,157,232,0.08);
+border: 1px solid rgba(74,157,232,0.3);
+border-radius: 4px;
+padding: 10px 14px;
 font-family: ‘DM Mono’, monospace;
-font-size: 0.75rem;
-color: var(–muted);
-letter-spacing: 1px;
+font-size: 0.68rem;
+color: var(–accent2);
+letter-spacing: 0.5px;
+margin-bottom: 14px;
 }
 
 .error-msg {
@@ -411,6 +313,8 @@ font-size: 0.8rem;
 color: var(–danger);
 margin: 20px 0;
 }
+
+.empty { text-align: center; padding: 40px 20px; font-family: ‘DM Mono’, monospace; font-size: 0.75rem; color: var(–muted); letter-spacing: 1px; }
 </style>
 
 </head>
@@ -433,14 +337,17 @@ margin: 20px 0;
 
 <script>
 const LEAGUE_ID = '1330745662001659904';
+
 let state = {
   league: null,
   users: [],
   rosters: [],
   tradedPicks: [],
   drafts: [],
-  ownerMap: {},   // roster_id -> display_name
-  draftOrder: [], // array of roster_ids in snake order (set by user)
+  upcomingDraft: null,
+  ownerMap: {},
+  draftOrder: [],
+  autoOrderLoaded: false,
   activeTab: 'traded',
   filterYear: 'all',
   filterTeam: 'all',
@@ -448,18 +355,18 @@ let state = {
 
 async function fetchJSON(url) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
 
 async function init() {
   try {
     const [league, users, rosters, tradedPicks, drafts] = await Promise.all([
-      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}`),
-      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/users`),
-      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`),
-      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/traded_picks`),
-      fetchJSON(`https://api.sleeper.app/v1/league/${LEAGUE_ID}/drafts`),
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID),
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/users'),
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/rosters'),
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/traded_picks'),
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts'),
     ]);
 
     state.league = league;
@@ -468,27 +375,52 @@ async function init() {
     state.tradedPicks = tradedPicks;
     state.drafts = drafts;
 
-    // Build owner map: roster_id -> team name / display name
+    // Build owner map: roster_id (string) -> display name
     const userById = {};
-    users.forEach(u => { userById[u.user_id] = u; });
-
-    rosters.forEach(r => {
+    users.forEach(function(u) { userById[u.user_id] = u; });
+    rosters.forEach(function(r) {
       const u = userById[r.owner_id];
-      const teamName = u?.metadata?.team_name || u?.display_name || `Team ${r.roster_id}`;
-      state.ownerMap[r.roster_id] = teamName;
+      state.ownerMap[String(r.roster_id)] = (u && u.metadata && u.metadata.team_name)
+        ? u.metadata.team_name
+        : (u ? u.display_name : 'Team ' + r.roster_id);
     });
+
+    // Find upcoming (or most recent) draft
+    const upcoming = (drafts.filter(function(d){ return d.status !== 'complete'; })
+      .sort(function(a,b){ return (a.created||0)-(b.created||0); })[0])
+      || drafts.sort(function(a,b){ return (b.created||0)-(a.created||0); })[0];
+
+    state.upcomingDraft = upcoming;
+
+    // Auto-load draft order from slot_to_roster_id
+    if (upcoming && upcoming.draft_id) {
+      try {
+        const detail = await fetchJSON('https://api.sleeper.app/v1/draft/' + upcoming.draft_id);
+        const slotMap = detail.slot_to_roster_id; // {"1": rosterId, "2": rosterId, ...}
+        if (slotMap) {
+          const slots = Object.keys(slotMap).map(Number).sort(function(a,b){return a-b;});
+          const order = slots.map(function(s){ return String(slotMap[String(s)]); });
+          if (order.length > 0 && order.every(function(x){ return x !== 'null' && x !== 'undefined'; })) {
+            state.draftOrder = order;
+            state.autoOrderLoaded = true;
+          }
+        }
+      } catch(e) {
+        console.warn('Draft detail failed:', e.message);
+      }
+    }
 
     document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
     renderTab();
-  } catch (e) {
+  } catch(e) {
     document.getElementById('mainContent').innerHTML =
-      `<div class="error-msg">Failed to load: ${e.message}</div>`;
+      '<div class="error-msg">Failed to load: ' + e.message + '</div>';
   }
 }
 
 function showTab(tab) {
   state.activeTab = tab;
-  document.querySelectorAll('.tab').forEach((t,i) => {
+  document.querySelectorAll('.tab').forEach(function(t, i) {
     t.classList.toggle('active', ['traded','board'][i] === tab);
   });
   renderTab();
@@ -499,68 +431,60 @@ function renderTab() {
   else renderDraftBoard();
 }
 
-// ─── TRADED PICKS TAB ─────────────────────────────────────────────────────────
+// ─── TRADED PICKS ─────────────────────────────────────────────────────────────
 
 function renderTradedPicks() {
   const picks = state.tradedPicks;
-  const years = [...new Set(picks.map(p => p.season))].sort();
-  const teams = Object.entries(state.ownerMap).sort((a,b) => a[1].localeCompare(b[1]));
+  const years = Array.from(new Set(picks.map(function(p){return p.season;}))).sort();
+  const teams = Object.entries(state.ownerMap).sort(function(a,b){ return a[1].localeCompare(b[1]); });
 
-  // Filter
-  let filtered = picks;
-  if (state.filterYear !== 'all') filtered = filtered.filter(p => p.season === state.filterYear);
-  if (state.filterTeam !== 'all') filtered = filtered.filter(p => String(p.owner_id) === state.filterTeam);
+  let filtered = picks.slice();
+  if (state.filterYear !== 'all') filtered = filtered.filter(function(p){ return p.season === state.filterYear; });
+  if (state.filterTeam !== 'all') filtered = filtered.filter(function(p){ return String(p.owner_id) === state.filterTeam; });
 
-  // Group by year then round
   const grouped = {};
-  filtered.forEach(p => {
+  filtered.forEach(function(p) {
     if (!grouped[p.season]) grouped[p.season] = {};
     if (!grouped[p.season][p.round]) grouped[p.season][p.round] = [];
     grouped[p.season][p.round].push(p);
   });
 
-  const yearFilters = `
-    <div class="filter-bar">
-      <button class="filter-btn ${state.filterYear==='all'?'active':''}" onclick="setFilter('year','all')">All Years</button>
-      ${years.map(y => `<button class="filter-btn ${state.filterYear===y?'active':''}" onclick="setFilter('year','${y}')">${y}</button>`).join('')}
-    </div>
-    <div class="filter-bar">
-      <button class="filter-btn ${state.filterTeam==='all'?'active':''}" onclick="setFilter('team','all')">All Teams</button>
-      ${teams.map(([rid,name]) => `<button class="filter-btn ${state.filterTeam===rid?'active':''}" onclick="setFilter('team','${rid}')">${name}</button>`).join('')}
-    </div>
-  `;
+  let html = '<div class="filter-bar">'
+    + '<button class="filter-btn ' + (state.filterYear==='all'?'active':'') + '" onclick="setFilter(\'year\',\'all\')">All Years</button>'
+    + years.map(function(y){
+        return '<button class="filter-btn ' + (state.filterYear===y?'active':'') + '" onclick="setFilter(\'year\',\'' + y + '\')">' + y + '</button>';
+      }).join('')
+    + '</div><div class="filter-bar">'
+    + '<button class="filter-btn ' + (state.filterTeam==='all'?'active':'') + '" onclick="setFilter(\'team\',\'all\')">All Teams</button>'
+    + teams.map(function(entry){
+        const rid = entry[0], name = entry[1];
+        return '<button class="filter-btn ' + (state.filterTeam===rid?'active':'') + '" onclick="setFilter(\'team\',\'' + rid + '\')">' + name + '</button>';
+      }).join('')
+    + '</div>';
 
   if (!filtered.length) {
-    document.getElementById('mainContent').innerHTML = yearFilters + `<div class="empty">No traded picks found</div>`;
+    document.getElementById('mainContent').innerHTML = html + '<div class="empty">No traded picks found</div>';
     return;
   }
 
-  let html = yearFilters + '<div class="picks-grid">';
-
-  Object.keys(grouped).sort().forEach(year => {
-    html += `<div class="section-label">${year} Season</div>`;
-    Object.keys(grouped[year]).sort((a,b)=>a-b).forEach(round => {
+  html += '<div class="picks-grid">';
+  Object.keys(grouped).sort().forEach(function(year) {
+    html += '<div class="section-label">' + year + ' Season</div>';
+    Object.keys(grouped[year]).sort(function(a,b){return a-b;}).forEach(function(round) {
       grouped[year][round]
-        .sort((a,b) => (state.ownerMap[a.owner_id]||'').localeCompare(state.ownerMap[b.owner_id]||''))
-        .forEach((p, i) => {
-          const ownerName = state.ownerMap[p.owner_id] || `Roster ${p.owner_id}`;
-          const origName = state.ownerMap[p.previous_owner_id] || `Roster ${p.previous_owner_id}`;
-          const isSameOwner = p.owner_id === p.previous_owner_id;
-          const delay = i * 30;
-          html += `
-            <div class="pick-card" style="animation-delay:${delay}ms">
-              <div class="pick-badge">
-                <div class="pick-year">${year}</div>
-                <div class="pick-round">RD ${round}</div>
-              </div>
-              <div class="pick-info">
-                <div class="pick-owner">${ownerName}</div>
-                <div class="pick-origin">
-                  ${isSameOwner ? 'Original pick' : `From <span>${origName}</span>`}
-                </div>
-              </div>
-              <div class="pick-type ${isSameOwner?'kept':'traded'}">${isSameOwner?'OWN':'TRADED'}</div>
-            </div>`;
+        .sort(function(a,b){
+          return (state.ownerMap[String(a.owner_id)]||'').localeCompare(state.ownerMap[String(b.owner_id)]||'');
+        })
+        .forEach(function(p, i) {
+          const ownerName = state.ownerMap[String(p.owner_id)] || 'Roster ' + p.owner_id;
+          const origName = state.ownerMap[String(p.previous_owner_id)] || 'Roster ' + p.previous_owner_id;
+          const isSame = String(p.owner_id) === String(p.previous_owner_id);
+          html += '<div class="pick-card" style="animation-delay:' + (i*30) + 'ms">'
+            + '<div><div class="pick-year">' + year + '</div><div class="pick-round">RD ' + round + '</div></div>'
+            + '<div><div class="pick-owner">' + ownerName + '</div>'
+            + '<div class="pick-origin">' + (isSame ? 'Original pick' : 'From <span>' + origName + '</span>') + '</div></div>'
+            + '<div class="pick-type ' + (isSame?'kept':'traded') + '">' + (isSame?'OWN':'TRADED') + '</div>'
+            + '</div>';
         });
     });
   });
@@ -575,98 +499,108 @@ function setFilter(type, val) {
   renderTab();
 }
 
-// ─── DRAFT BOARD TAB ──────────────────────────────────────────────────────────
+// ─── DRAFT BOARD ──────────────────────────────────────────────────────────────
+//
+// HOW SLEEPER traded_picks WORKS FOR MULTI-HOP CHAINS:
+// Each trade generates a new record. For chain A->B->C on the same pick slot:
+//   Record 1: { roster_id: A, previous_owner_id: A, owner_id: B }
+//   Record 2: { roster_id: A, previous_owner_id: B, owner_id: C }
+//
+// roster_id = the ORIGINAL slot owner (never changes)
+// The FINAL owner is the owner_id that does NOT appear as anyone's previous_owner_id
+// within the same (roster_id, round) group.
+
+function buildFinalOwnerMap(yearPicks) {
+  // Group all records by original slot: "rosterId_round"
+  const groups = {};
+  yearPicks.forEach(function(p) {
+    const key = p.roster_id + '_' + p.round;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+
+  const result = {};
+  Object.keys(groups).forEach(function(key) {
+    const records = groups[key];
+    if (records.length === 1) {
+      result[key] = String(records[0].owner_id);
+    } else {
+      // The terminal owner is one whose owner_id never appears as a previous_owner_id
+      const allPrevOwners = new Set(records.map(function(r){ return String(r.previous_owner_id); }));
+      const terminal = records.find(function(r){ return !allPrevOwners.has(String(r.owner_id)); });
+      result[key] = terminal ? String(terminal.owner_id) : String(records[records.length-1].owner_id);
+    }
+  });
+
+  return result;
+}
 
 function renderDraftBoard() {
   const numTeams = state.rosters.length;
-  const teams = Object.entries(state.ownerMap).sort((a,b)=>+a[0]-+b[0]);
 
-  // If no draft order set yet, show input form
   if (state.draftOrder.length === 0) {
+    const teams = Object.entries(state.ownerMap).sort(function(a,b){ return Number(a[0])-Number(b[0]); });
     let selects = '';
     for (let i = 1; i <= numTeams; i++) {
-      selects += `
-        <div class="order-row">
-          <div class="order-num">${i}</div>
-          <select class="order-select" id="pick${i}">
-            <option value="">— Select Team —</option>
-            ${teams.map(([rid,name]) => `<option value="${rid}">${name}</option>`).join('')}
-          </select>
-        </div>`;
+      selects += '<div class="order-row"><div class="order-num">' + i + '</div>'
+        + '<select class="order-select" id="pick' + i + '">'
+        + '<option value="">— Select Team —</option>'
+        + teams.map(function(entry){
+            return '<option value="' + entry[0] + '">' + entry[1] + '</option>';
+          }).join('')
+        + '</select></div>';
     }
-
-    document.getElementById('mainContent').innerHTML = `
-      <div class="draft-input-section">
-        <h3>Original Draft Order</h3>
-        <p>Enter the pre-trade draft order (pick 1 → pick ${numTeams}) so I can calculate who actually gets each pick after all trades.</p>
-        <div class="order-list">${selects}</div>
-        <button class="btn" onclick="submitDraftOrder()">Calculate Pick Board</button>
-      </div>`;
+    document.getElementById('mainContent').innerHTML =
+      '<div class="draft-input-section">'
+      + '<h3>Original Draft Order</h3>'
+      + '<p>Could not auto-load draft order. Enter the pre-trade slot order (slot 1 through ' + numTeams + ').</p>'
+      + '<div class="order-list">' + selects + '</div>'
+      + '<button class="btn" onclick="submitDraftOrder()">Calculate Pick Board</button>'
+      + '</div>';
     return;
   }
 
-  // Build the board
-  // For traded picks: build a lookup of who owns each (year, round, original roster_id)
-  // We need the upcoming draft's year
-  const upcomingDraft = state.drafts
-    .filter(d => d.status !== 'complete')
-    .sort((a,b) => (a.created||0) - (b.created||0))[0]
-    || state.drafts.sort((a,b) => (b.created||0) - (a.created||0))[0];
+  const draft = state.upcomingDraft;
+  const draftYear = String(draft ? draft.season : new Date().getFullYear());
+  const numRounds = (draft && draft.settings && draft.settings.rounds) ? draft.settings.rounds : 5;
+  const snakeOrder = state.draftOrder;
 
-  const draftYear = upcomingDraft?.season || String(new Date().getFullYear());
-  const numRounds = upcomingDraft?.settings?.rounds || 5;
-  const snakeOrder = state.draftOrder; // roster_ids in pick 1..N order
+  const yearPicks = state.tradedPicks.filter(function(p){ return String(p.season) === draftYear; });
+  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
 
-  // Build a chain resolver for this year's traded picks.
-  // Sleeper stores each trade as {roster_id (original slot owner), previous_owner_id, owner_id}.
-  // For multi-hop trades we need to follow: origSlot -> A -> B -> C (current owner).
-  // Strategy: for each pick slot (roster_id + round), find the trade where roster_id matches
-  // the slot, then keep following owner_id through subsequent trades until no more hops exist.
+  let html = state.autoOrderLoaded
+    ? '<div class="info-banner">Draft order auto-loaded from Sleeper · ' + draftYear + ' · ' + numRounds + ' rounds · ' + snakeOrder.length + ' teams</div>'
+    : '';
 
-  const yearPicks = state.tradedPicks.filter(p => p.season === draftYear);
-
-  function resolveOwner(origRosterId, round) {
-    // Find all trades for this round
-    const roundTrades = yearPicks.filter(p => p.round === round);
-    // Walk the chain: start at origRosterId, keep finding who they traded TO
-    let current = String(origRosterId);
-    let maxHops = 20; // safety valve
-    while (maxHops-- > 0) {
-      // Find a trade where previous_owner_id === current (meaning current traded it away)
-      const next = roundTrades.find(p => String(p.previous_owner_id) === current);
-      if (!next) break;
-      current = String(next.owner_id);
-    }
-    return current;
-  }
-
-  // Build full board
-  let html = `<div class="section-label">${draftYear} Draft — ${numRounds} Rounds</div>`;
+  html += '<div class="section-label">' + draftYear + ' Draft — ' + numRounds + ' Rounds</div>';
   html += '<div class="draft-board"><table class="board-table">';
-  html += '<thead><tr><th>#</th><th>Pick Goes To</th><th>Original From</th></tr></thead><tbody>';
+  html += '<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>';
 
   for (let round = 1; round <= numRounds; round++) {
-    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
+    html += '<tr class="round-header"><td colspan="3">Round ' + round + '</td></tr>';
     const isSnake = round % 2 === 0;
-    const roundOrder = isSnake ? [...snakeOrder].reverse() : snakeOrder;
+    const roundOrder = isSnake ? snakeOrder.slice().reverse() : snakeOrder;
 
-    roundOrder.forEach((origRosterId, idx) => {
-      const overallPick = `${round}.${String(idx+1).padStart(2,'0')}`;
-      const currentOwner = resolveOwner(origRosterId, round);
-      const origName = state.ownerMap[origRosterId] || `Roster ${origRosterId}`;
-      const curName = state.ownerMap[currentOwner] || `Roster ${currentOwner}`;
+    roundOrder.forEach(function(origRosterId, idx) {
+      const slot = round + '.' + String(idx+1).padStart(2,'0');
+      const key = origRosterId + '_' + round;
+      const currentOwner = finalOwnerMap[key] || String(origRosterId);
+      const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
+      const curName = state.ownerMap[currentOwner] || 'Roster ' + currentOwner;
       const isSame = currentOwner === String(origRosterId);
 
-      html += `<tr>
-        <td class="pick-num">${overallPick}</td>
-        <td class="team-cell">${curName}</td>
-        <td class="origin-cell ${isSame?'same':''}">${isSame ? '—' : origName}</td>
-      </tr>`;
+      html += '<tr>'
+        + '<td class="pick-num">' + slot + '</td>'
+        + '<td class="team-cell">' + curName + '</td>'
+        + '<td class="origin-cell ' + (isSame?'same':'') + '">' + (isSame?'—':origName) + '</td>'
+        + '</tr>';
     });
   }
 
   html += '</tbody></table></div>';
-  html += `<button class="btn" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="state.draftOrder=[];renderTab()">Reset Order</button>`;
+  if (state.autoOrderLoaded) {
+    html += '<button class="btn btn-ghost" onclick="state.draftOrder=[];state.autoOrderLoaded=false;renderTab()">Override Draft Order</button>';
+  }
 
   document.getElementById('mainContent').innerHTML = html;
 }
@@ -675,22 +609,16 @@ function submitDraftOrder() {
   const numTeams = state.rosters.length;
   const order = [];
   const seen = new Set();
-
   for (let i = 1; i <= numTeams; i++) {
-    const val = document.getElementById(`pick${i}`)?.value;
-    if (!val) {
-      alert(`Please select a team for pick ${i}`);
-      return;
-    }
-    if (seen.has(val)) {
-      alert(`${state.ownerMap[val]} is selected more than once`);
-      return;
-    }
+    const el = document.getElementById('pick' + i);
+    const val = el ? el.value : '';
+    if (!val) { alert('Please select a team for pick ' + i); return; }
+    if (seen.has(val)) { alert((state.ownerMap[val]||val) + ' is selected more than once'); return; }
     seen.add(val);
     order.push(val);
   }
-
   state.draftOrder = order;
+  state.autoOrderLoaded = false;
   renderTab();
 }
 
