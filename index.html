@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8,315 +7,413 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap');
 
-:root {
-–bg: #0a0d12;
-–surface: #111520;
-–card: #161c2a;
-–border: #1e2740;
-–accent: #e8c84a;
-–accent2: #4a9de8;
-–text: #e8eaf0;
-–muted: #5a6280;
-–danger: #e84a6a;
-–green: #4ae8a0;
-}
+  :root {
+    --bg: #0a0d12;
+    --surface: #111520;
+    --card: #161c2a;
+    --border: #1e2740;
+    --accent: #e8c84a;
+    --accent2: #4a9de8;
+    --text: #e8eaf0;
+    --muted: #5a6280;
+    --danger: #e84a6a;
+    --green: #4ae8a0;
+  }
 
-- { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-body {
-background: var(–bg);
-color: var(–text);
-font-family: ‘DM Sans’, sans-serif;
-min-height: 100vh;
-padding: 0 0 60px;
-}
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 60px;
+    line-height: 1.5;
+  }
 
-.header {
-background: linear-gradient(135deg, #0a0d12 0%, #111a2e 100%);
-border-bottom: 1px solid var(–border);
-padding: 24px 20px 20px;
-position: sticky;
-top: 0;
-z-index: 100;
-}
+  .header {
+    background: linear-gradient(135deg, #0a0d12 0%, #111a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 20px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
 
-.header-top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
 
-.header h1 {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 2rem;
-letter-spacing: 2px;
-color: var(–accent);
-line-height: 1;
-}
+  .header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: 3px;
+    color: var(--accent);
+    line-height: 1;
+  }
 
-.league-name {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.7rem;
-color: var(–muted);
-letter-spacing: 1px;
-text-transform: uppercase;
-}
+  .league-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
 
-.tabs { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
 
-.tab {
-background: none;
-border: 1px solid var(–border);
-color: var(–muted);
-font-family: ‘DM Mono’, monospace;
-font-size: 0.7rem;
-letter-spacing: 1px;
-text-transform: uppercase;
-padding: 6px 14px;
-border-radius: 2px;
-cursor: pointer;
-transition: all 0.15s;
-}
+  .tab {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-.tab.active { background: var(–accent); border-color: var(–accent); color: #000; font-weight: 500; }
-.tab:not(.active):hover { border-color: var(–accent); color: var(–accent); }
+  .tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
 
-.content { padding: 20px 16px; }
+  .tab:not(.active):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 
-.status {
-display: flex; flex-direction: column; align-items: center;
-justify-content: center; padding: 60px 20px; gap: 12px;
-}
+  .content {
+    padding: 24px 16px;
+  }
 
-.spinner {
-width: 32px; height: 32px;
-border: 2px solid var(–border);
-border-top-color: var(–accent);
-border-radius: 50%;
-animation: spin 0.8s linear infinite;
-}
+  .status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 16px;
+  }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
 
-.status p {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.75rem;
-color: var(–muted);
-letter-spacing: 1px;
-}
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-.section-label {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-letter-spacing: 2px;
-text-transform: uppercase;
-color: var(–muted);
-margin-bottom: 10px;
-margin-top: 22px;
-}
+  .status p {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
 
-.section-label:first-of-type { margin-top: 0; }
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 28px 0 12px;
+  }
 
-.picks-grid { display: flex; flex-direction: column; gap: 8px; }
+  .picks-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
 
-.pick-card {
-background: var(–card);
-border: 1px solid var(–border);
-border-radius: 4px;
-padding: 12px 14px;
-display: grid;
-grid-template-columns: 56px 1fr auto;
-align-items: center;
-gap: 12px;
-animation: fadeUp 0.3s ease both;
-}
+  .pick-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
 
-@keyframes fadeUp {
-from { opacity: 0; transform: translateY(8px); }
-to { opacity: 1; transform: translateY(0); }
-}
+  .pick-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(232, 200, 74, 0.15);
+  }
 
-.pick-year {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 1.4rem;
-color: var(–accent);
-line-height: 1;
-text-align: center;
-}
+  .pick-year {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    color: var(--accent);
+    line-height: 1;
+    text-align: center;
+  }
 
-.pick-round {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-color: var(–muted);
-letter-spacing: 1px;
-text-align: center;
-}
+  .pick-round {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-align: center;
+  }
 
-.pick-owner { font-size: 0.85rem; font-weight: 600; color: var(–text); margin-bottom: 3px; }
+  .pick-owner {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
 
-.pick-origin {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-color: var(–muted);
-letter-spacing: 0.5px;
-}
+  .pick-origin {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
 
-.pick-origin span { color: var(–accent2); }
+  .pick-origin span { color: var(--accent2); }
 
-.pick-type {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.6rem;
-letter-spacing: 1px;
-text-transform: uppercase;
-padding: 3px 8px;
-border-radius: 2px;
-border: 1px solid;
-}
+  .pick-type {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    border: 1px solid;
+    font-weight: 500;
+  }
 
-.pick-type.traded { color: var(–danger); border-color: var(–danger); background: rgba(232,74,106,0.08); }
-.pick-type.kept { color: var(–green); border-color: var(–green); background: rgba(74,232,160,0.08); }
+  .pick-type.traded {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(232,74,106,0.1);
+  }
 
-.filter-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pick-type.kept {
+    color: var(--green);
+    border-color: var(--green);
+    background: rgba(74,232,160,0.1);
+  }
 
-.filter-btn {
-background: none;
-border: 1px solid var(–border);
-color: var(–muted);
-font-family: ‘DM Mono’, monospace;
-font-size: 0.65rem;
-letter-spacing: 1px;
-text-transform: uppercase;
-padding: 5px 12px;
-border-radius: 2px;
-cursor: pointer;
-transition: all 0.15s;
-}
+  .filter-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
 
-.filter-btn.active { background: var(–accent2); border-color: var(–accent2); color: #000; }
+  .filter-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-.draft-board { overflow-x: auto; }
+  .filter-btn.active {
+    background: var(--accent2);
+    border-color: var(--accent2);
+    color: #000;
+    font-weight: 500;
+  }
 
-.board-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .draft-board {
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
 
-.board-table th {
-font-family: ‘DM Mono’, monospace;
-font-size: 0.6rem;
-letter-spacing: 1.5px;
-text-transform: uppercase;
-color: var(–muted);
-padding: 8px 10px;
-text-align: left;
-border-bottom: 1px solid var(–border);
-}
+  .board-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
 
-.board-table td { padding: 10px 10px; border-bottom: 1px solid rgba(30,39,64,0.5); vertical-align: middle; }
-.board-table tr:last-child td { border-bottom: none; }
-.board-table .pick-num { font-family: ‘Bebas Neue’, sans-serif; font-size: 1.1rem; color: var(–accent); width: 40px; }
-.board-table .team-cell { font-weight: 600; color: var(–text); }
-.board-table .origin-cell { font-family: ‘DM Mono’, monospace; font-size: 0.65rem; color: var(–accent2); }
-.board-table .same { color: var(–muted); }
+  .board-table th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+  }
 
-.round-header td {
-background: var(–surface);
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 0.9rem;
-letter-spacing: 2px;
-color: var(–muted);
-padding: 8px 10px;
-border-bottom: 1px solid var(–border);
-}
+  .board-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(30,39,64,0.4);
+    vertical-align: middle;
+  }
 
-.draft-input-section {
-background: var(–card);
-border: 1px solid var(–border);
-border-radius: 4px;
-padding: 16px;
-margin-bottom: 20px;
-}
+  .board-table tr:last-child td { border-bottom: none; }
 
-.draft-input-section h3 {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 1.1rem;
-letter-spacing: 1px;
-color: var(–accent);
-margin-bottom: 6px;
-}
+  .board-table tr:nth-child(even) {
+    background: rgba(255,255,255,0.03);
+  }
 
-.draft-input-section p { font-size: 0.75rem; color: var(–muted); margin-bottom: 12px; line-height: 1.5; }
+  .board-table .pick-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.25rem;
+    color: var(--accent);
+    width: 48px;
+  }
 
-.order-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.order-row { display: flex; align-items: center; gap: 10px; }
+  .board-table .team-cell { font-weight: 600; color: var(--text); }
 
-.order-num {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 1.1rem;
-color: var(–accent);
-width: 22px;
-text-align: right;
-flex-shrink: 0;
-}
+  .board-table .origin-cell {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+  }
 
-.order-select {
-flex: 1;
-background: var(–surface);
-border: 1px solid var(–border);
-border-radius: 3px;
-color: var(–text);
-font-family: ‘DM Sans’, sans-serif;
-font-size: 0.8rem;
-padding: 7px 10px;
-appearance: none;
--webkit-appearance: none;
-}
+  .board-table .same { color: var(--muted); }
 
-.order-select:focus { outline: none; border-color: var(–accent); }
+  .round-header td {
+    background: var(--surface);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    color: var(--muted);
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--border);
+  }
 
-.btn {
-background: var(–accent);
-color: #000;
-border: none;
-border-radius: 3px;
-font-family: ‘DM Mono’, monospace;
-font-size: 0.7rem;
-font-weight: 500;
-letter-spacing: 1px;
-text-transform: uppercase;
-padding: 10px 20px;
-cursor: pointer;
-transition: opacity 0.15s;
-width: 100%;
-}
+  .draft-input-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
 
-.btn:hover { opacity: 0.85; }
+  .draft-input-section h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
 
-.btn-ghost {
-background: none;
-border: 1px solid var(–border);
-color: var(–muted);
-margin-top: 12px;
-}
+  .order-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 
-.info-banner {
-background: rgba(74,157,232,0.08);
-border: 1px solid rgba(74,157,232,0.3);
-border-radius: 4px;
-padding: 10px 14px;
-font-family: ‘DM Mono’, monospace;
-font-size: 0.68rem;
-color: var(–accent2);
-letter-spacing: 0.5px;
-margin-bottom: 14px;
-}
+  .order-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
-.error-msg {
-background: rgba(232,74,106,0.1);
-border: 1px solid var(–danger);
-border-radius: 4px;
-padding: 12px 16px;
-font-size: 0.8rem;
-color: var(–danger);
-margin: 20px 0;
-}
+  .order-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    color: var(--accent);
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
 
-.empty { text-align: center; padding: 40px 20px; font-family: ‘DM Mono’, monospace; font-size: 0.75rem; color: var(–muted); letter-spacing: 1px; }
+  .order-select {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    padding: 10px 14px;
+  }
+
+  .order-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 14px 24px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+
+  .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-top: 16px;
+  }
+
+  .info-banner {
+    background: rgba(74,157,232,0.1);
+    border: 1px solid rgba(74,157,232,0.4);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent2);
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+  }
+
+  .error-msg {
+    background: rgba(232,74,106,0.1);
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 0.85rem;
+    color: var(--danger);
+    margin: 20px 0;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
 </style>
-
 </head>
 <body>
 
@@ -375,32 +472,29 @@ async function init() {
     state.tradedPicks = tradedPicks;
     state.drafts = drafts;
 
-    // Build owner map: roster_id (string) -> display name
     const userById = {};
-    users.forEach(function(u) { userById[u.user_id] = u; });
-    rosters.forEach(function(r) {
+    users.forEach(u => { userById[u.user_id] = u; });
+    rosters.forEach(r => {
       const u = userById[r.owner_id];
       state.ownerMap[String(r.roster_id)] = (u && u.metadata && u.metadata.team_name)
         ? u.metadata.team_name
         : (u ? u.display_name : 'Team ' + r.roster_id);
     });
 
-    // Find upcoming (or most recent) draft
-    const upcoming = (drafts.filter(function(d){ return d.status !== 'complete'; })
-      .sort(function(a,b){ return (a.created||0)-(b.created||0); })[0])
-      || drafts.sort(function(a,b){ return (b.created||0)-(a.created||0); })[0];
+    const upcoming = (drafts.filter(d => d.status !== 'complete')
+      .sort((a,b) => (a.created||0)-(b.created||0))[0])
+      || drafts.sort((a,b) => (b.created||0)-(a.created||0))[0];
 
     state.upcomingDraft = upcoming;
 
-    // Auto-load draft order from slot_to_roster_id
     if (upcoming && upcoming.draft_id) {
       try {
         const detail = await fetchJSON('https://api.sleeper.app/v1/draft/' + upcoming.draft_id);
-        const slotMap = detail.slot_to_roster_id; // {"1": rosterId, "2": rosterId, ...}
+        const slotMap = detail.slot_to_roster_id;
         if (slotMap) {
-          const slots = Object.keys(slotMap).map(Number).sort(function(a,b){return a-b;});
-          const order = slots.map(function(s){ return String(slotMap[String(s)]); });
-          if (order.length > 0 && order.every(function(x){ return x !== 'null' && x !== 'undefined'; })) {
+          const slots = Object.keys(slotMap).map(Number).sort((a,b)=>a-b);
+          const order = slots.map(s => String(slotMap[String(s)]));
+          if (order.length > 0 && order.every(x => x !== 'null' && x !== 'undefined')) {
             state.draftOrder = order;
             state.autoOrderLoaded = true;
           }
@@ -420,7 +514,7 @@ async function init() {
 
 function showTab(tab) {
   state.activeTab = tab;
-  document.querySelectorAll('.tab').forEach(function(t, i) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
     t.classList.toggle('active', ['traded','board'][i] === tab);
   });
   renderTab();
@@ -432,35 +526,33 @@ function renderTab() {
 }
 
 // ─── TRADED PICKS ─────────────────────────────────────────────────────────────
-
 function renderTradedPicks() {
   const picks = state.tradedPicks;
-  const years = Array.from(new Set(picks.map(function(p){return p.season;}))).sort();
-  const teams = Object.entries(state.ownerMap).sort(function(a,b){ return a[1].localeCompare(b[1]); });
+  const years = [...new Set(picks.map(p => p.season))].sort();
+  const teams = Object.entries(state.ownerMap).sort((a,b) => a[1].localeCompare(b[1]));
 
-  let filtered = picks.slice();
-  if (state.filterYear !== 'all') filtered = filtered.filter(function(p){ return p.season === state.filterYear; });
-  if (state.filterTeam !== 'all') filtered = filtered.filter(function(p){ return String(p.owner_id) === state.filterTeam; });
+  let filtered = [...picks];
+  if (state.filterYear !== 'all') filtered = filtered.filter(p => p.season === state.filterYear);
+  if (state.filterTeam !== 'all') filtered = filtered.filter(p => String(p.owner_id) === state.filterTeam);
 
   const grouped = {};
-  filtered.forEach(function(p) {
+  filtered.forEach(p => {
     if (!grouped[p.season]) grouped[p.season] = {};
     if (!grouped[p.season][p.round]) grouped[p.season][p.round] = [];
     grouped[p.season][p.round].push(p);
   });
 
-  let html = '<div class="filter-bar">'
-    + '<button class="filter-btn ' + (state.filterYear==='all'?'active':'') + '" onclick="setFilter(\'year\',\'all\')">All Years</button>'
-    + years.map(function(y){
-        return '<button class="filter-btn ' + (state.filterYear===y?'active':'') + '" onclick="setFilter(\'year\',\'' + y + '\')">' + y + '</button>';
-      }).join('')
-    + '</div><div class="filter-bar">'
-    + '<button class="filter-btn ' + (state.filterTeam==='all'?'active':'') + '" onclick="setFilter(\'team\',\'all\')">All Teams</button>'
-    + teams.map(function(entry){
-        const rid = entry[0], name = entry[1];
-        return '<button class="filter-btn ' + (state.filterTeam===rid?'active':'') + '" onclick="setFilter(\'team\',\'' + rid + '\')">' + name + '</button>';
-      }).join('')
-    + '</div>';
+  let html = `
+    <div class="filter-bar">
+      <button class="filter-btn ${state.filterYear==='all'?'active':''}" onclick="setFilter('year','all')">All Years</button>
+      ${years.map(y => `<button class="filter-btn ${state.filterYear===y?'active':''}" onclick="setFilter('year','${y}')">${y}</button>`).join('')}
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn ${state.filterTeam==='all'?'active':''}" onclick="setFilter('team','all')">All Teams</button>
+      ${teams.map(([rid, name]) => `
+        <button class="filter-btn ${state.filterTeam===rid?'active':''}" onclick="setFilter('team','${rid}')">${name}</button>
+      `).join('')}
+    </div>`;
 
   if (!filtered.length) {
     document.getElementById('mainContent').innerHTML = html + '<div class="empty">No traded picks found</div>';
@@ -468,27 +560,30 @@ function renderTradedPicks() {
   }
 
   html += '<div class="picks-grid">';
-  Object.keys(grouped).sort().forEach(function(year) {
-    html += '<div class="section-label">' + year + ' Season</div>';
-    Object.keys(grouped[year]).sort(function(a,b){return a-b;}).forEach(function(round) {
+  Object.keys(grouped).sort().forEach(year => {
+    html += `<div class="section-label">${year} Season</div>`;
+    Object.keys(grouped[year]).sort((a,b)=>a-b).forEach(round => {
       grouped[year][round]
-        .sort(function(a,b){
-          return (state.ownerMap[String(a.owner_id)]||'').localeCompare(state.ownerMap[String(b.owner_id)]||'');
-        })
-        .forEach(function(p, i) {
+        .sort((a,b) => (state.ownerMap[String(a.owner_id)]||'').localeCompare(state.ownerMap[String(b.owner_id)]||''))
+        .forEach((p, i) => {
           const ownerName = state.ownerMap[String(p.owner_id)] || 'Roster ' + p.owner_id;
           const origName = state.ownerMap[String(p.previous_owner_id)] || 'Roster ' + p.previous_owner_id;
           const isSame = String(p.owner_id) === String(p.previous_owner_id);
-          html += '<div class="pick-card" style="animation-delay:' + (i*30) + 'ms">'
-            + '<div><div class="pick-year">' + year + '</div><div class="pick-round">RD ' + round + '</div></div>'
-            + '<div><div class="pick-owner">' + ownerName + '</div>'
-            + '<div class="pick-origin">' + (isSame ? 'Original pick' : 'From <span>' + origName + '</span>') + '</div></div>'
-            + '<div class="pick-type ' + (isSame?'kept':'traded') + '">' + (isSame?'OWN':'TRADED') + '</div>'
-            + '</div>';
+          html += `
+            <div class="pick-card" style="animation-delay:${i*30}ms">
+              <div>
+                <div class="pick-year">${year}</div>
+                <div class="pick-round">RD ${round}</div>
+              </div>
+              <div>
+                <div class="pick-owner">${ownerName}</div>
+                <div class="pick-origin">${isSame ? 'Original pick' : `From <span>${origName}</span>`}</div>
+              </div>
+              <div class="pick-type ${isSame?'kept':'traded'}">${isSame?'OWN':'TRADED'}</div>
+            </div>`;
         });
     });
   });
-
   html += '</div>';
   document.getElementById('mainContent').innerHTML = html;
 }
@@ -500,38 +595,25 @@ function setFilter(type, val) {
 }
 
 // ─── DRAFT BOARD ──────────────────────────────────────────────────────────────
-//
-// HOW SLEEPER traded_picks WORKS FOR MULTI-HOP CHAINS:
-// Each trade generates a new record. For chain A->B->C on the same pick slot:
-//   Record 1: { roster_id: A, previous_owner_id: A, owner_id: B }
-//   Record 2: { roster_id: A, previous_owner_id: B, owner_id: C }
-//
-// roster_id = the ORIGINAL slot owner (never changes)
-// The FINAL owner is the owner_id that does NOT appear as anyone's previous_owner_id
-// within the same (roster_id, round) group.
-
 function buildFinalOwnerMap(yearPicks) {
-  // Group all records by original slot: "rosterId_round"
   const groups = {};
-  yearPicks.forEach(function(p) {
+  yearPicks.forEach(p => {
     const key = p.roster_id + '_' + p.round;
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   });
 
   const result = {};
-  Object.keys(groups).forEach(function(key) {
+  Object.keys(groups).forEach(key => {
     const records = groups[key];
     if (records.length === 1) {
       result[key] = String(records[0].owner_id);
     } else {
-      // The terminal owner is one whose owner_id never appears as a previous_owner_id
-      const allPrevOwners = new Set(records.map(function(r){ return String(r.previous_owner_id); }));
-      const terminal = records.find(function(r){ return !allPrevOwners.has(String(r.owner_id)); });
+      const allPrevOwners = new Set(records.map(r => String(r.previous_owner_id)));
+      const terminal = records.find(r => !allPrevOwners.has(String(r.owner_id)));
       result[key] = terminal ? String(terminal.owner_id) : String(records[records.length-1].owner_id);
     }
   });
-
   return result;
 }
 
@@ -539,24 +621,25 @@ function renderDraftBoard() {
   const numTeams = state.rosters.length;
 
   if (state.draftOrder.length === 0) {
-    const teams = Object.entries(state.ownerMap).sort(function(a,b){ return Number(a[0])-Number(b[0]); });
+    const teams = Object.entries(state.ownerMap).sort((a,b) => Number(a[0])-Number(b[0]));
     let selects = '';
     for (let i = 1; i <= numTeams; i++) {
-      selects += '<div class="order-row"><div class="order-num">' + i + '</div>'
-        + '<select class="order-select" id="pick' + i + '">'
-        + '<option value="">— Select Team —</option>'
-        + teams.map(function(entry){
-            return '<option value="' + entry[0] + '">' + entry[1] + '</option>';
-          }).join('')
-        + '</select></div>';
+      selects += `
+        <div class="order-row">
+          <div class="order-num">${i}</div>
+          <select class="order-select" id="pick${i}">
+            <option value="">— Select Team —</option>
+            ${teams.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
+          </select>
+        </div>`;
     }
-    document.getElementById('mainContent').innerHTML =
-      '<div class="draft-input-section">'
-      + '<h3>Original Draft Order</h3>'
-      + '<p>Could not auto-load draft order. Enter the pre-trade slot order (slot 1 through ' + numTeams + ').</p>'
-      + '<div class="order-list">' + selects + '</div>'
-      + '<button class="btn" onclick="submitDraftOrder()">Calculate Pick Board</button>'
-      + '</div>';
+    document.getElementById('mainContent').innerHTML = `
+      <div class="draft-input-section">
+        <h3>Original Draft Order</h3>
+        <p>Could not auto-load draft order. Enter the pre-trade slot order (slot 1 through ${numTeams}).</p>
+        <div class="order-list">${selects}</div>
+        <button class="btn" onclick="submitDraftOrder()">Calculate Pick Board</button>
+      </div>`;
     return;
   }
 
@@ -565,41 +648,42 @@ function renderDraftBoard() {
   const numRounds = (draft && draft.settings && draft.settings.rounds) ? draft.settings.rounds : 5;
   const snakeOrder = state.draftOrder;
 
-  const yearPicks = state.tradedPicks.filter(function(p){ return String(p.season) === draftYear; });
+  const yearPicks = state.tradedPicks.filter(p => String(p.season) === draftYear);
   const finalOwnerMap = buildFinalOwnerMap(yearPicks);
 
   let html = state.autoOrderLoaded
-    ? '<div class="info-banner">Draft order auto-loaded from Sleeper · ' + draftYear + ' · ' + numRounds + ' rounds · ' + snakeOrder.length + ' teams</div>'
+    ? `<div class="info-banner">Draft order auto-loaded from Sleeper · ${draftYear} · ${numRounds} rounds · ${snakeOrder.length} teams</div>`
     : '';
 
-  html += '<div class="section-label">' + draftYear + ' Draft — ' + numRounds + ' Rounds</div>';
-  html += '<div class="draft-board"><table class="board-table">';
-  html += '<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>';
+  html += `<div class="section-label">${draftYear} Draft — ${numRounds} Rounds</div>`;
+  html += `<div class="draft-board"><table class="board-table">`;
+  html += `<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
 
   for (let round = 1; round <= numRounds; round++) {
-    html += '<tr class="round-header"><td colspan="3">Round ' + round + '</td></tr>';
+    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
     const isSnake = round % 2 === 0;
-    const roundOrder = isSnake ? snakeOrder.slice().reverse() : snakeOrder;
+    const roundOrder = isSnake ? [...snakeOrder].reverse() : snakeOrder;
 
-    roundOrder.forEach(function(origRosterId, idx) {
-      const slot = round + '.' + String(idx+1).padStart(2,'0');
+    roundOrder.forEach((origRosterId, idx) => {
+      const slot = `${round}.${String(idx+1).padStart(2,'0')}`;
       const key = origRosterId + '_' + round;
       const currentOwner = finalOwnerMap[key] || String(origRosterId);
       const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
       const curName = state.ownerMap[currentOwner] || 'Roster ' + currentOwner;
       const isSame = currentOwner === String(origRosterId);
 
-      html += '<tr>'
-        + '<td class="pick-num">' + slot + '</td>'
-        + '<td class="team-cell">' + curName + '</td>'
-        + '<td class="origin-cell ' + (isSame?'same':'') + '">' + (isSame?'—':origName) + '</td>'
-        + '</tr>';
+      html += `
+        <tr>
+          <td class="pick-num">${slot}</td>
+          <td class="team-cell">${curName}</td>
+          <td class="origin-cell ${isSame?'same':''}">${isSame ? '—' : origName}</td>
+        </tr>`;
     });
   }
 
-  html += '</tbody></table></div>';
+  html += `</tbody></table></div>`;
   if (state.autoOrderLoaded) {
-    html += '<button class="btn btn-ghost" onclick="state.draftOrder=[];state.autoOrderLoaded=false;renderTab()">Override Draft Order</button>';
+    html += `<button class="btn btn-ghost" onclick="state.draftOrder=[];state.autoOrderLoaded=false;renderTab()">Override Draft Order</button>`;
   }
 
   document.getElementById('mainContent').innerHTML = html;
@@ -624,6 +708,5 @@ function submitDraftOrder() {
 
 init();
 </script>
-
 </body>
 </html>
