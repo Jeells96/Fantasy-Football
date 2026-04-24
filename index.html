@@ -5,345 +5,429 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dynasty Pick Tracker</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap');
 
-  :root {
-    --bg: #0a0d12;
-    --surface: #111520;
-    --card: #161c2a;
-    --border: #1e2740;
-    --accent: #e8c84a;
-    --accent2: #4a9de8;
-    --text: #e8eaf0;
-    --muted: #5a6280;
-    --danger: #e84a6a;
-    --green: #4ae8a0;
-  }
+:root {
+  --bg:#0a0d12;
+  --surface:#111520;
+  --card:#161c2a;
+  --border:#1e2740;
+  --accent:#e8c84a;
+  --accent2:#4a9de8;
+  --text:#e8eaf0;
+  --muted:#5a6280;
+  --danger:#e84a6a;
+  --green:#4ae8a0;
+}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing:border-box; margin:0; padding:0; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    min-height: 100vh;
-    padding-bottom: 60px;
-    line-height: 1.5;
-  }
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  min-height:100vh;
+  padding-bottom:60px;
+  line-height:1.5;
+}
 
-  .header {
-    background: linear-gradient(135deg, #0a0d12 0%, #111a2e 100%);
-    border-bottom: 1px solid var(--border);
-    padding: 24px 20px 20px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  }
+.header {
+  background:linear-gradient(135deg,#0a0d12 0%,#111a2e 100%);
+  border-bottom:1px solid var(--border);
+  padding:24px 20px 20px;
+  position:sticky;
+  top:0;
+  z-index:100;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
 
-  .header-top {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 8px;
-  }
+.header-top {
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  margin-bottom:8px;
+}
 
-  .header h1 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.2rem;
-    letter-spacing: 3px;
-    color: var(--accent);
-    line-height: 1;
-  }
+.header h1 {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:2.2rem;
+  letter-spacing:3px;
+  color:var(--accent);
+  line-height:1;
+}
 
-  .league-name {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-top: 4px;
-  }
+.league-name {
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  color:var(--muted);
+  letter-spacing:2px;
+  text-transform:uppercase;
+}
 
-  .tabs {
-    display: flex;
-    gap: 8px;
-    margin-top: 16px;
-    flex-wrap: wrap;
-  }
+.tabs {
+  display:flex;
+  gap:8px;
+  margin-top:16px;
+  flex-wrap:wrap;
+}
 
-  .tab {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 10px 20px;
-    border-radius: 9999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
+.tab {
+  background:none;
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  padding:10px 20px;
+  border-radius:9999px;
+  cursor:pointer;
+}
 
-  .tab.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #000;
-    font-weight: 600;
-  }
+.tab.active {
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#000;
+  font-weight:600;
+}
 
-  .tab:not(.active):hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+.content { padding:24px 16px; }
 
-  .content { padding: 24px 16px; }
+.status {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:80px 20px;
+  gap:16px;
+}
 
-  .status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 20px;
-    gap: 16px;
-  }
+.spinner {
+  width:36px;
+  height:36px;
+  border:3px solid var(--border);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .9s linear infinite;
+}
 
-  .spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
-  }
+@keyframes spin { to { transform:rotate(360deg); } }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+.status p {
+  font-family:'DM Mono', monospace;
+  font-size:.8rem;
+  color:var(--muted);
+  letter-spacing:1px;
+}
 
-  .status p {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.8rem;
-    color: var(--muted);
-    letter-spacing: 1px;
-  }
+.section-label {
+  font-family:'DM Mono', monospace;
+  font-size:.7rem;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin:28px 0 12px;
+}
 
-  .section-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 28px 0 12px;
-  }
+.filter-bar {
+  display:flex;
+  gap:6px;
+  margin-bottom:12px;
+  flex-wrap:wrap;
+}
 
-  .picks-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+.filter-btn {
+  background:none;
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-family:'DM Mono', monospace;
+  font-size:.7rem;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  padding:8px 16px;
+  border-radius:9999px;
+  cursor:pointer;
+}
 
-  .pick-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 64px 1fr auto;
-    align-items: center;
-    gap: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  }
+.filter-btn.active {
+  background:var(--accent2);
+  border-color:var(--accent2);
+  color:#000;
+  font-weight:500;
+}
 
-  .pick-year {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.6rem;
-    color: var(--accent);
-    line-height: 1;
-    text-align: center;
-  }
+.year-selector {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:16px;
+  flex-wrap:wrap;
+}
 
-  .pick-round {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-align: center;
-  }
+.year-select {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:6px;
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  font-size:.95rem;
+  padding:10px 14px;
+  min-width:140px;
+}
 
-  .pick-owner {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
+.info-banner {
+  background:rgba(74,157,232,.1);
+  border:1px solid rgba(74,157,232,.4);
+  border-radius:8px;
+  padding:12px 16px;
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  color:var(--accent2);
+  margin-bottom:16px;
+}
 
-  .pick-origin {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-  }
+.draft-board {
+  overflow-x:auto;
+  border-radius:8px;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+}
 
-  .pick-origin span { color: var(--accent2); }
+.board-table {
+  width:100%;
+  border-collapse:collapse;
+  font-size:.82rem;
+}
 
-  .pick-type {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 6px 12px;
-    border-radius: 9999px;
-    border: 1px solid;
-    font-weight: 500;
-  }
+.board-table th {
+  font-family:'DM Mono', monospace;
+  font-size:.65rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  color:var(--muted);
+  padding:12px 14px;
+  text-align:left;
+  border-bottom:2px solid var(--border);
+  background:var(--surface);
+}
 
-  .pick-type.traded {
-    color: var(--danger);
-    border-color: var(--danger);
-    background: rgba(232,74,106,0.1);
-  }
+.board-table td {
+  padding:12px 14px;
+  border-bottom:1px solid rgba(30,39,64,.4);
+}
 
-  .pick-type.kept {
-    color: var(--green);
-    border-color: var(--green);
-    background: rgba(74,232,160,0.1);
-  }
+.board-table tr:nth-child(even) {
+  background:rgba(255,255,255,.03);
+}
 
-  .filter-bar {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
+.pick-num {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:1.25rem;
+  color:var(--accent);
+  width:48px;
+}
 
-  .filter-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 8px 16px;
-    border-radius: 9999px;
-    cursor: pointer;
-  }
+.team-cell { font-weight:600; }
 
-  .filter-btn.active {
-    background: var(--accent2);
-    border-color: var(--accent2);
-    color: #000;
-    font-weight: 500;
-  }
+.team-link {
+  color:var(--text);
+  cursor:pointer;
+  text-decoration:underline;
+  text-decoration-color:rgba(232,200,74,.45);
+  text-underline-offset:3px;
+}
 
-  .draft-board {
-    overflow-x: auto;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  }
+.team-link:hover { color:var(--accent); }
 
-  .board-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.82rem;
-  }
+.origin-cell {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--accent2);
+}
 
-  .board-table th {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding: 12px 14px;
-    text-align: left;
-    border-bottom: 2px solid var(--border);
-    background: var(--surface);
-  }
+.same { color:var(--muted); }
 
-  .board-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid rgba(30,39,64,0.4);
-  }
+.round-header td {
+  background:var(--surface);
+  font-family:'Bebas Neue', sans-serif;
+  font-size:1rem;
+  letter-spacing:2px;
+  color:var(--muted);
+  padding:10px 14px;
+  border-bottom:2px solid var(--border);
+}
 
-  .board-table tr:nth-child(even) {
-    background: rgba(255,255,255,0.03);
-  }
+.picks-grid {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
 
-  .pick-num {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.25rem;
-    color: var(--accent);
-    width: 48px;
-  }
+.pick-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:16px;
+  display:grid;
+  grid-template-columns:64px 1fr auto;
+  align-items:center;
+  gap:16px;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+}
 
-  .team-cell {
-    font-weight: 600;
-  }
+.pick-year {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:1.6rem;
+  color:var(--accent);
+  line-height:1;
+  text-align:center;
+}
 
-  .origin-cell {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--accent2);
-  }
+.pick-round {
+  font-family:'DM Mono', monospace;
+  font-size:.7rem;
+  color:var(--muted);
+  letter-spacing:1px;
+  text-align:center;
+}
 
-  .same { color: var(--muted); }
+.pick-owner {
+  font-size:.95rem;
+  font-weight:600;
+  color:var(--text);
+  margin-bottom:4px;
+}
 
-  .round-header td {
-    background: var(--surface);
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1rem;
-    letter-spacing: 2px;
-    color: var(--muted);
-    padding: 10px 14px;
-    border-bottom: 2px solid var(--border);
-  }
+.pick-origin {
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  color:var(--muted);
+  letter-spacing:.5px;
+}
 
-  .year-selector {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
+.pick-origin span { color:var(--accent2); }
 
-  .year-select {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.95rem;
-    padding: 10px 14px;
-    min-width: 140px;
-  }
+.pick-type {
+  font-family:'DM Mono', monospace;
+  font-size:.65rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  padding:6px 12px;
+  border-radius:9999px;
+  border:1px solid;
+  font-weight:500;
+}
 
-  .info-banner {
-    background: rgba(74,157,232,0.1);
-    border: 1px solid rgba(74,157,232,0.4);
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--accent2);
-    margin-bottom: 16px;
-  }
+.pick-type.traded {
+  color:var(--danger);
+  border-color:var(--danger);
+  background:rgba(232,74,106,.1);
+}
 
-  .empty, .error-msg {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 24px;
-    color: var(--muted);
-    font-family: 'DM Mono', monospace;
-    text-align: center;
-  }
+.pick-type.kept {
+  color:var(--green);
+  border-color:var(--green);
+  background:rgba(74,232,160,.1);
+}
 
-  .error-msg {
-    color: var(--danger);
-    border-color: var(--danger);
-  }
+.team-panel {
+  margin-top:22px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px;
+}
+
+.team-panel-top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.team-panel h2 {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:1.8rem;
+  letter-spacing:2px;
+  color:var(--accent);
+}
+
+.close-btn {
+  background:none;
+  border:1px solid var(--border);
+  color:var(--muted);
+  border-radius:999px;
+  padding:6px 12px;
+  font-family:'DM Mono', monospace;
+  cursor:pointer;
+}
+
+.detail-grid {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+}
+
+@media (min-width:800px) {
+  .detail-grid { grid-template-columns:1fr 1fr; }
+}
+
+.detail-box {
+  background:rgba(0,0,0,.18);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px;
+}
+
+.detail-title {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+
+.roster-list, .owned-picks-list {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.roster-row, .owned-pick-row {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:9px 10px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(30,39,64,.5);
+  border-radius:6px;
+}
+
+.player-name, .owned-pick-main {
+  font-weight:600;
+}
+
+.player-pos, .owned-pick-sub {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+}
+
+.empty, .error-msg {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:24px;
+  color:var(--muted);
+  font-family:'DM Mono', monospace;
+  text-align:center;
+}
+
+.error-msg {
+  color:var(--danger);
+  border-color:var(--danger);
+}
 </style>
 </head>
 
@@ -372,18 +456,20 @@
 const LEAGUE_ID = '1330745662001659904';
 
 let state = {
-  league: null,
-  users: [],
-  rosters: [],
-  tradedPicks: [],
-  drafts: [],
-  ownerMap: {},
-  draftDetails: {},
-  availableYears: [],
-  selectedDraftYear: null,
-  activeTab: 'board',
-  filterYear: 'all',
-  filterTeam: 'all'
+  league:null,
+  users:[],
+  rosters:[],
+  tradedPicks:[],
+  drafts:[],
+  players:{},
+  ownerMap:{},
+  draftDetails:{},
+  availableYears:[],
+  selectedDraftYear:null,
+  selectedTeamRosterId:null,
+  activeTab:'board',
+  filterYear:'all',
+  filterTeam:'all'
 };
 
 function currentSeasonYear() {
@@ -398,19 +484,21 @@ async function fetchJSON(url) {
 
 async function init() {
   try {
-    const [league, users, rosters, tradedPicks, drafts] = await Promise.all([
+    const [league, users, rosters, tradedPicks, drafts, players] = await Promise.all([
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/users'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/rosters'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/traded_picks'),
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts')
+      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts'),
+      fetchJSON('https://api.sleeper.app/v1/players/nfl')
     ]);
 
     state.league = league;
-    state.users = users;
-    state.rosters = rosters;
+    state.users = users || [];
+    state.rosters = rosters || [];
     state.tradedPicks = tradedPicks || [];
     state.drafts = drafts || [];
+    state.players = players || {};
 
     const userById = {};
     state.users.forEach(u => userById[u.user_id] = u);
@@ -505,10 +593,276 @@ function getExactPickSlot(year, originalRosterId, round) {
   if (Number(round) % 2 === 0) order = [...order].reverse();
 
   const index = order.findIndex(rid => String(rid) === String(originalRosterId));
-
   if (index === -1) return '';
 
   return `${round}.${String(index + 1).padStart(2, '0')}`;
+}
+
+function buildFinalOwnerMap(yearPicks) {
+  const groups = {};
+
+  yearPicks.forEach(p => {
+    const key = String(p.roster_id) + '_' + String(p.round);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+
+  const result = {};
+
+  Object.keys(groups).forEach(key => {
+    const records = groups[key];
+
+    if (records.length === 1) {
+      result[key] = String(records[0].owner_id);
+    } else {
+      const allPreviousOwners = new Set(records.map(r => String(r.previous_owner_id)));
+      const terminal = records.find(r => !allPreviousOwners.has(String(r.owner_id)));
+
+      result[key] = terminal
+        ? String(terminal.owner_id)
+        : String(records[records.length - 1].owner_id);
+    }
+  });
+
+  return result;
+}
+
+function getCurrentOwnerForPick(year, originalRosterId, round) {
+  const yearPicks = state.tradedPicks.filter(p => String(p.season) === String(year));
+  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
+  const key = String(originalRosterId) + '_' + String(round);
+
+  return finalOwnerMap[key] || String(originalRosterId);
+}
+
+function getAllOwnedPicks(rosterId) {
+  const owned = [];
+
+  state.availableYears.forEach(year => {
+    const draftForYear = state.drafts.find(d => String(d.season) === String(year));
+    const detail = state.draftDetails[String(year)];
+
+    let originalRosterIds = Object.keys(state.ownerMap).sort((a,b) => Number(a) - Number(b));
+    let numRounds = 5;
+
+    if (detail && detail.slot_to_roster_id) {
+      originalRosterIds = Object.values(detail.slot_to_roster_id).map(String);
+
+      if (detail.settings && detail.settings.rounds) {
+        numRounds = parseInt(detail.settings.rounds, 10);
+      }
+    } else if (draftForYear && draftForYear.settings && draftForYear.settings.rounds) {
+      numRounds = parseInt(draftForYear.settings.rounds, 10);
+    }
+
+    for (let round = 1; round <= numRounds; round++) {
+      originalRosterIds.forEach(originalRosterId => {
+        const currentOwner = getCurrentOwnerForPick(year, originalRosterId, round);
+
+        if (String(currentOwner) === String(rosterId)) {
+          const exactSlot = getExactPickSlot(year, originalRosterId, round);
+          const origName = state.ownerMap[String(originalRosterId)] || 'Roster ' + originalRosterId;
+
+          owned.push({
+            year,
+            round,
+            exactSlot,
+            originalRosterId,
+            origName
+          });
+        }
+      });
+    }
+  });
+
+  return owned.sort((a,b) => {
+    if (Number(a.year) !== Number(b.year)) return Number(a.year) - Number(b.year);
+    if (Number(a.round) !== Number(b.round)) return Number(a.round) - Number(b.round);
+    return (a.exactSlot || '').localeCompare(b.exactSlot || '');
+  });
+}
+
+function selectTeam(rosterId) {
+  state.selectedTeamRosterId = String(rosterId);
+  renderDraftBoard();
+  setTimeout(() => {
+    const panel = document.getElementById('teamPanel');
+    if (panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 50);
+}
+
+function clearSelectedTeam() {
+  state.selectedTeamRosterId = null;
+  renderDraftBoard();
+}
+
+function playerDisplayName(playerId) {
+  const p = state.players[String(playerId)];
+  if (!p) return 'Player ' + playerId;
+
+  return p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player ' + playerId;
+}
+
+function playerPosition(playerId) {
+  const p = state.players[String(playerId)];
+  if (!p) return '';
+  return p.position || '';
+}
+
+function renderTeamPanel() {
+  const rosterId = state.selectedTeamRosterId;
+  if (!rosterId) return '';
+
+  const teamName = state.ownerMap[String(rosterId)] || 'Roster ' + rosterId;
+  const roster = state.rosters.find(r => String(r.roster_id) === String(rosterId));
+  const playerIds = roster && roster.players ? roster.players : [];
+  const ownedPicks = getAllOwnedPicks(rosterId);
+
+  const rosterHtml = playerIds.length
+    ? playerIds
+        .map(pid => ({
+          id: pid,
+          name: playerDisplayName(pid),
+          pos: playerPosition(pid)
+        }))
+        .sort((a,b) => {
+          const order = { QB:1, RB:2, WR:3, TE:4, K:5, DEF:6 };
+          return (order[a.pos] || 99) - (order[b.pos] || 99) || a.name.localeCompare(b.name);
+        })
+        .map(p => `
+          <div class="roster-row">
+            <span class="player-name">${p.name}</span>
+            <span class="player-pos">${p.pos}</span>
+          </div>
+        `).join('')
+    : '<div class="empty">No roster found</div>';
+
+  const picksHtml = ownedPicks.length
+    ? ownedPicks.map(p => `
+        <div class="owned-pick-row">
+          <div>
+            <div class="owned-pick-main">${p.exactSlot ? p.exactSlot : p.year + ' Round ' + p.round}</div>
+            <div class="owned-pick-sub">${p.year} · Original: ${p.origName}</div>
+          </div>
+        </div>
+      `).join('')
+    : '<div class="empty">No picks found</div>';
+
+  return `
+    <div class="team-panel" id="teamPanel">
+      <div class="team-panel-top">
+        <h2>${teamName}</h2>
+        <button class="close-btn" onclick="clearSelectedTeam()">Close</button>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-box">
+          <div class="detail-title">Roster</div>
+          <div class="roster-list">${rosterHtml}</div>
+        </div>
+
+        <div class="detail-box">
+          <div class="detail-title">Current Draft Picks Owned</div>
+          <div class="owned-picks-list">${picksHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDraftBoard() {
+  const year = state.selectedDraftYear;
+  const draftForYear = state.drafts.find(d => String(d.season) === String(year));
+  const detail = state.draftDetails[String(year)];
+
+  let snakeOrder = [];
+  let hasExactDraftOrder = false;
+  let numRounds = 5;
+
+  if (detail && detail.slot_to_roster_id) {
+    const slotMap = detail.slot_to_roster_id;
+    const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
+
+    snakeOrder = slots.map(s => String(slotMap[String(s)]));
+    hasExactDraftOrder = true;
+
+    if (detail.settings && detail.settings.rounds) {
+      numRounds = parseInt(detail.settings.rounds, 10);
+    }
+  } else {
+    snakeOrder = Object.keys(state.ownerMap)
+      .map(Number)
+      .sort((a,b) => a - b)
+      .map(String);
+
+    if (draftForYear && draftForYear.settings && draftForYear.settings.rounds) {
+      numRounds = parseInt(draftForYear.settings.rounds, 10);
+    }
+  }
+
+  const yearPicks = state.tradedPicks.filter(p => String(p.season) === String(year));
+  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
+
+  let html = `
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Draft Board</span>
+
+      <select class="year-select" onchange="selectDraftYear(this.value)">
+        ${state.availableYears.map(y => `
+          <option value="${y}" ${String(y) === String(year) ? 'selected' : ''}>${y}</option>
+        `).join('')}
+      </select>
+    </div>
+  `;
+
+  if (hasExactDraftOrder) {
+    html += `<div class="info-banner">Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams</div>`;
+  } else {
+    html += `<div class="info-banner">Draft order not available yet — pick numbers left blank</div>`;
+  }
+
+  html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
+  html += `<div class="draft-board"><table class="board-table">`;
+  html += `<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
+
+  for (let round = 1; round <= numRounds; round++) {
+    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
+
+    const roundOrder = hasExactDraftOrder && round % 2 === 0
+      ? [...snakeOrder].reverse()
+      : snakeOrder;
+
+    roundOrder.forEach((origRosterId, idx) => {
+      const slot = hasExactDraftOrder
+        ? `${round}.${String(idx + 1).padStart(2, '0')}`
+        : '';
+
+      const key = String(origRosterId) + '_' + String(round);
+      const currentOwner = finalOwnerMap[key] || String(origRosterId);
+
+      const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
+      const curName = state.ownerMap[String(currentOwner)] || 'Roster ' + currentOwner;
+      const isSame = String(currentOwner) === String(origRosterId);
+
+      html += `
+        <tr>
+          <td class="pick-num">${slot}</td>
+          <td class="team-cell team-link" onclick="selectTeam('${currentOwner}')">${curName}</td>
+          <td class="origin-cell ${isSame ? 'same' : ''}">${isSame ? '—' : origName}</td>
+        </tr>
+      `;
+    });
+  }
+
+  html += `</tbody></table></div>`;
+  html += renderTeamPanel();
+
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function selectDraftYear(year) {
+  state.selectedDraftYear = year;
+  renderDraftBoard();
 }
 
 function renderTradedPicks() {
@@ -597,129 +951,6 @@ function setFilter(type, val) {
   if (type === 'year') state.filterYear = val;
   if (type === 'team') state.filterTeam = val;
   renderTab();
-}
-
-function buildFinalOwnerMap(yearPicks) {
-  const groups = {};
-
-  yearPicks.forEach(p => {
-    const key = String(p.roster_id) + '_' + String(p.round);
-
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(p);
-  });
-
-  const result = {};
-
-  Object.keys(groups).forEach(key => {
-    const records = groups[key];
-
-    if (records.length === 1) {
-      result[key] = String(records[0].owner_id);
-    } else {
-      const allPreviousOwners = new Set(records.map(r => String(r.previous_owner_id)));
-      const terminal = records.find(r => !allPreviousOwners.has(String(r.owner_id)));
-
-      result[key] = terminal
-        ? String(terminal.owner_id)
-        : String(records[records.length - 1].owner_id);
-    }
-  });
-
-  return result;
-}
-
-function renderDraftBoard() {
-  const year = state.selectedDraftYear;
-  const draftForYear = state.drafts.find(d => String(d.season) === String(year));
-  const detail = state.draftDetails[String(year)];
-
-  let snakeOrder = [];
-  let hasExactDraftOrder = false;
-  let numRounds = 5;
-
-  if (detail && detail.slot_to_roster_id) {
-    const slotMap = detail.slot_to_roster_id;
-    const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
-
-    snakeOrder = slots.map(s => String(slotMap[String(s)]));
-    hasExactDraftOrder = true;
-
-    if (detail.settings && detail.settings.rounds) {
-      numRounds = parseInt(detail.settings.rounds, 10);
-    }
-  } else {
-    snakeOrder = Object.keys(state.ownerMap)
-      .map(Number)
-      .sort((a,b) => a - b)
-      .map(String);
-
-    if (draftForYear && draftForYear.settings && draftForYear.settings.rounds) {
-      numRounds = parseInt(draftForYear.settings.rounds, 10);
-    }
-  }
-
-  const yearPicks = state.tradedPicks.filter(p => String(p.season) === String(year));
-  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
-
-  let html = `
-    <div class="year-selector">
-      <span class="section-label" style="margin:0;">Draft Board</span>
-
-      <select class="year-select" onchange="selectDraftYear(this.value)">
-        ${state.availableYears.map(y => `
-          <option value="${y}" ${String(y) === String(year) ? 'selected' : ''}>${y}</option>
-        `).join('')}
-      </select>
-    </div>
-  `;
-
-  if (hasExactDraftOrder) {
-    html += `<div class="info-banner">Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams</div>`;
-  } else {
-    html += `<div class="info-banner">Draft order not available yet — pick numbers left blank</div>`;
-  }
-
-  html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
-  html += `<div class="draft-board"><table class="board-table">`;
-  html += `<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
-
-  for (let round = 1; round <= numRounds; round++) {
-    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
-
-    let roundOrder = hasExactDraftOrder && round % 2 === 0
-      ? [...snakeOrder].reverse()
-      : snakeOrder;
-
-    roundOrder.forEach((origRosterId, idx) => {
-      const slot = hasExactDraftOrder
-        ? `${round}.${String(idx + 1).padStart(2, '0')}`
-        : '';
-
-      const key = String(origRosterId) + '_' + String(round);
-      const currentOwner = finalOwnerMap[key] || String(origRosterId);
-
-      const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
-      const curName = state.ownerMap[String(currentOwner)] || 'Roster ' + currentOwner;
-      const isSame = String(currentOwner) === String(origRosterId);
-
-      html += `
-        <tr>
-          <td class="pick-num">${slot}</td>
-          <td class="team-cell">${curName}</td>
-          <td class="origin-cell ${isSame ? 'same' : ''}">${isSame ? '—' : origName}</td>
-        </tr>
-      `;
-    });
-  }
-
-  html += `</tbody></table></div>`;
-  document.getElementById('mainContent').innerHTML = html;
-}
-
-function selectDraftYear(year) {
-  state.selectedDraftYear = year;
-  renderDraftBoard();
 }
 
 init();
