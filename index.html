@@ -261,7 +261,9 @@ body {
   margin:16px 0 10px;
 }
 
-.detail-title:first-child { margin-top:0; }
+.detail-title:first-child {
+  margin-top:0;
+}
 
 .roster-list, .owned-picks-list {
   display:flex;
@@ -279,7 +281,9 @@ body {
   border-radius:6px;
 }
 
-.player-name, .owned-pick-main { font-weight:600; }
+.player-name, .owned-pick-main {
+  font-weight:600;
+}
 
 .player-pos, .owned-pick-sub {
   font-family:'DM Mono', monospace;
@@ -324,14 +328,14 @@ body {
 const LEAGUE_ID = '1330745662001659904';
 
 const REAL_NAME_BY_SLEEPER_TEAM = {
-  'Nacua Matada': 'Jaren',
-  'Ross': 'Ross',
-  'Dakota': 'Dakota',
-  'Linn': 'Linn',
-  'Darnell Mooned Me': 'Ryder',
-  'They Hit the second Bower': 'Reese',
+  'nacua matada': 'Jaren',
+  'ross': 'Ross',
+  'dakota': 'Dakota',
+  'linn': 'Linn',
+  'darnell mooned me': 'Ryder',
+  'they hit the second bower': 'Reese',
   'to infinity and bijan': 'Duke',
-  'Njigbas in Paris': 'Dylan'
+  'njigbas in paris': 'Dylan'
 };
 
 let state = {
@@ -342,12 +346,15 @@ let state = {
   drafts:[],
   players:{},
   ownerMap:{},
-  realNameMap:{},
   draftDetails:{},
   availableYears:[],
   selectedDraftYear:null,
   selectedTeamRosterId:null
 };
+
+function normalizeName(name) {
+  return String(name || '').trim().toLowerCase();
+}
 
 function currentSeasonYear() {
   return String(new Date().getFullYear());
@@ -388,11 +395,10 @@ async function init() {
 
     state.rosters.forEach(r => {
       const u = userById[r.owner_id];
-      const sleeperName = getSleeperTeamName(u, r.roster_id);
-      const realName = REAL_NAME_BY_SLEEPER_TEAM[sleeperName] || sleeperName;
+      const sleeperTeamName = getSleeperTeamName(u, r.roster_id);
+      const realName = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
 
       state.ownerMap[String(r.roster_id)] = realName;
-      state.realNameMap[String(r.roster_id)] = realName;
     });
 
     await Promise.all(
