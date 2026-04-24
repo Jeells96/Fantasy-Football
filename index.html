@@ -64,33 +64,6 @@ body {
   text-transform:uppercase;
 }
 
-.tabs {
-  display:flex;
-  gap:8px;
-  margin-top:16px;
-  flex-wrap:wrap;
-}
-
-.tab {
-  background:none;
-  border:1px solid var(--border);
-  color:var(--muted);
-  font-family:'DM Mono', monospace;
-  font-size:.75rem;
-  letter-spacing:1.5px;
-  text-transform:uppercase;
-  padding:10px 20px;
-  border-radius:9999px;
-  cursor:pointer;
-}
-
-.tab.active {
-  background:var(--accent);
-  border-color:var(--accent);
-  color:#000;
-  font-weight:600;
-}
-
 .content { padding:24px 16px; }
 
 .status {
@@ -127,33 +100,6 @@ body {
   text-transform:uppercase;
   color:var(--muted);
   margin:28px 0 12px;
-}
-
-.filter-bar {
-  display:flex;
-  gap:6px;
-  margin-bottom:12px;
-  flex-wrap:wrap;
-}
-
-.filter-btn {
-  background:none;
-  border:1px solid var(--border);
-  color:var(--muted);
-  font-family:'DM Mono', monospace;
-  font-size:.7rem;
-  letter-spacing:1px;
-  text-transform:uppercase;
-  padding:8px 16px;
-  border-radius:9999px;
-  cursor:pointer;
-}
-
-.filter-btn.active {
-  background:var(--accent2);
-  border-color:var(--accent2);
-  color:#000;
-  font-weight:500;
 }
 
 .year-selector {
@@ -256,79 +202,6 @@ body {
   border-bottom:2px solid var(--border);
 }
 
-.picks-grid {
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-
-.pick-card {
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:16px;
-  display:grid;
-  grid-template-columns:64px 1fr auto;
-  align-items:center;
-  gap:16px;
-  box-shadow:0 4px 12px rgba(0,0,0,.2);
-}
-
-.pick-year {
-  font-family:'Bebas Neue', sans-serif;
-  font-size:1.6rem;
-  color:var(--accent);
-  line-height:1;
-  text-align:center;
-}
-
-.pick-round {
-  font-family:'DM Mono', monospace;
-  font-size:.7rem;
-  color:var(--muted);
-  letter-spacing:1px;
-  text-align:center;
-}
-
-.pick-owner {
-  font-size:.95rem;
-  font-weight:600;
-  color:var(--text);
-  margin-bottom:4px;
-}
-
-.pick-origin {
-  font-family:'DM Mono', monospace;
-  font-size:.75rem;
-  color:var(--muted);
-  letter-spacing:.5px;
-}
-
-.pick-origin span { color:var(--accent2); }
-
-.pick-type {
-  font-family:'DM Mono', monospace;
-  font-size:.65rem;
-  letter-spacing:1.5px;
-  text-transform:uppercase;
-  padding:6px 12px;
-  border-radius:9999px;
-  border:1px solid;
-  font-weight:500;
-}
-
-.pick-type.traded {
-  color:var(--danger);
-  border-color:var(--danger);
-  background:rgba(232,74,106,.1);
-}
-
-.pick-type.kept {
-  color:var(--green);
-  border-color:var(--green);
-  background:rgba(74,232,160,.1);
-}
-
 .team-panel {
   margin-top:22px;
   background:var(--card);
@@ -388,9 +261,7 @@ body {
   margin:16px 0 10px;
 }
 
-.detail-title:first-child {
-  margin-top:0;
-}
+.detail-title:first-child { margin-top:0; }
 
 .roster-list, .owned-picks-list {
   display:flex;
@@ -408,9 +279,7 @@ body {
   border-radius:6px;
 }
 
-.player-name, .owned-pick-main {
-  font-weight:600;
-}
+.player-name, .owned-pick-main { font-weight:600; }
 
 .player-pos, .owned-pick-sub {
   font-family:'DM Mono', monospace;
@@ -442,11 +311,6 @@ body {
     <h1>Pick Tracker</h1>
     <span class="league-name" id="leagueName">Loading...</span>
   </div>
-
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('board')">Draft Board</button>
-    <button class="tab" onclick="showTab('traded')">Traded Picks</button>
-  </div>
 </div>
 
 <div class="content" id="mainContent">
@@ -459,6 +323,17 @@ body {
 <script>
 const LEAGUE_ID = '1330745662001659904';
 
+const REAL_NAME_BY_SLEEPER_TEAM = {
+  'Nacua Matada': 'Jaren',
+  'Ross': 'Ross',
+  'Dakota': 'Dakota',
+  'Linn': 'Linn',
+  'Darnell Mooned Me': 'Ryder',
+  'They Hit the second Bower': 'Reese',
+  'to infinity and bijan': 'Duke',
+  'Njigbas in Paris': 'Dylan'
+};
+
 let state = {
   league:null,
   users:[],
@@ -467,13 +342,11 @@ let state = {
   drafts:[],
   players:{},
   ownerMap:{},
+  realNameMap:{},
   draftDetails:{},
   availableYears:[],
   selectedDraftYear:null,
-  selectedTeamRosterId:null,
-  activeTab:'board',
-  filterYear:'all',
-  filterTeam:'all'
+  selectedTeamRosterId:null
 };
 
 function currentSeasonYear() {
@@ -484,6 +357,12 @@ async function fetchJSON(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
+}
+
+function getSleeperTeamName(user, rosterId) {
+  if (user && user.metadata && user.metadata.team_name) return user.metadata.team_name;
+  if (user && user.display_name) return user.display_name;
+  return 'Team ' + rosterId;
 }
 
 async function init() {
@@ -509,12 +388,11 @@ async function init() {
 
     state.rosters.forEach(r => {
       const u = userById[r.owner_id];
-      state.ownerMap[String(r.roster_id)] =
-        u && u.metadata && u.metadata.team_name
-          ? u.metadata.team_name
-          : u
-            ? u.display_name
-            : 'Team ' + r.roster_id;
+      const sleeperName = getSleeperTeamName(u, r.roster_id);
+      const realName = REAL_NAME_BY_SLEEPER_TEAM[sleeperName] || sleeperName;
+
+      state.ownerMap[String(r.roster_id)] = realName;
+      state.realNameMap[String(r.roster_id)] = realName;
     });
 
     await Promise.all(
@@ -544,46 +422,13 @@ async function init() {
       ? thisYear
       : state.availableYears[0] || thisYear;
 
-    state.filterYear = state.availableYears.includes(thisYear)
-      ? thisYear
-      : 'all';
-
     document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
-    renderTab();
+    renderDraftBoard();
 
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
       '<div class="error-msg">Failed to load: ' + e.message + '</div>';
   }
-}
-
-function showTab(tab) {
-  state.activeTab = tab;
-
-  document.querySelectorAll('.tab').forEach(button => {
-    const isActive =
-      (tab === 'board' && button.textContent.trim() === 'Draft Board') ||
-      (tab === 'traded' && button.textContent.trim() === 'Traded Picks');
-
-    button.classList.toggle('active', isActive);
-  });
-
-  renderTab();
-}
-
-function renderTab() {
-  if (state.activeTab === 'traded') renderTradedPicks();
-  else renderDraftBoard();
-}
-
-function sortYearsCurrentFirst(years) {
-  const thisYear = currentSeasonYear();
-
-  return [...years].sort((a,b) => {
-    if (String(a) === thisYear) return -1;
-    if (String(b) === thisYear) return 1;
-    return Number(b) - Number(a);
-  });
 }
 
 function getExactPickSlot(year, originalRosterId, round) {
@@ -891,94 +736,6 @@ function renderDraftBoard() {
 function selectDraftYear(year) {
   state.selectedDraftYear = year;
   renderDraftBoard();
-}
-
-function renderTradedPicks() {
-  const picks = state.tradedPicks;
-  const years = sortYearsCurrentFirst([...new Set(picks.map(p => String(p.season)))]);
-  const teams = Object.entries(state.ownerMap).sort((a,b) => a[1].localeCompare(b[1]));
-
-  let filtered = [...picks];
-
-  if (state.filterYear !== 'all') {
-    filtered = filtered.filter(p => String(p.season) === String(state.filterYear));
-  }
-
-  if (state.filterTeam !== 'all') {
-    filtered = filtered.filter(p => String(p.owner_id) === String(state.filterTeam));
-  }
-
-  const grouped = {};
-
-  filtered.forEach(p => {
-    const season = String(p.season);
-    const round = String(p.round);
-
-    if (!grouped[season]) grouped[season] = {};
-    if (!grouped[season][round]) grouped[season][round] = [];
-
-    grouped[season][round].push(p);
-  });
-
-  let html = `
-    <div class="filter-bar">
-      <button class="filter-btn ${state.filterYear === 'all' ? 'active' : ''}" onclick="setFilter('year','all')">All Years</button>
-      ${years.map(y => `<button class="filter-btn ${state.filterYear === y ? 'active' : ''}" onclick="setFilter('year','${y}')">${y}</button>`).join('')}
-    </div>
-
-    <div class="filter-bar">
-      <button class="filter-btn ${state.filterTeam === 'all' ? 'active' : ''}" onclick="setFilter('team','all')">All Teams</button>
-      ${teams.map(([rid, name]) => `<button class="filter-btn ${state.filterTeam === rid ? 'active' : ''}" onclick="setFilter('team','${rid}')">${name}</button>`).join('')}
-    </div>
-  `;
-
-  if (!filtered.length) {
-    document.getElementById('mainContent').innerHTML = html + '<div class="empty">No traded picks found</div>';
-    return;
-  }
-
-  html += '<div class="picks-grid">';
-
-  sortYearsCurrentFirst(Object.keys(grouped)).forEach(year => {
-    html += `<div class="section-label">${year} Season</div>`;
-
-    Object.keys(grouped[year]).sort((a,b) => Number(a) - Number(b)).forEach(round => {
-      grouped[year][round].forEach((p, i) => {
-        const ownerName = state.ownerMap[String(p.owner_id)] || 'Roster ' + p.owner_id;
-        const origName = state.ownerMap[String(p.previous_owner_id)] || 'Roster ' + p.previous_owner_id;
-        const isSame = String(p.owner_id) === String(p.previous_owner_id);
-        const exactSlot = getExactPickSlot(year, p.roster_id, round);
-
-        html += `
-          <div class="pick-card" style="animation-delay:${i * 30}ms">
-            <div>
-              <div class="pick-year">${exactSlot || year}</div>
-              <div class="pick-round">${exactSlot ? year : 'RD ' + round}</div>
-            </div>
-
-            <div>
-              <div class="pick-owner">${ownerName}</div>
-              <div class="pick-origin">
-                ${isSame ? 'Original pick' : `From <span>${origName}</span>`}
-                ${exactSlot ? `<br><span>Exact pick: ${exactSlot}</span>` : ''}
-              </div>
-            </div>
-
-            <div class="pick-type ${isSame ? 'kept' : 'traded'}">${isSame ? 'OWN' : 'TRADED'}</div>
-          </div>
-        `;
-      });
-    });
-  });
-
-  html += '</div>';
-  document.getElementById('mainContent').innerHTML = html;
-}
-
-function setFilter(type, val) {
-  if (type === 'year') state.filterYear = val;
-  if (type === 'team') state.filterTeam = val;
-  renderTab();
 }
 
 init();
