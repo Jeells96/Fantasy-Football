@@ -154,12 +154,6 @@
     align-items: center;
     gap: 16px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .pick-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(232, 200, 74, 0.15);
   }
 
   .pick-year {
@@ -235,7 +229,6 @@
     padding: 8px 16px;
     border-radius: 9999px;
     cursor: pointer;
-    transition: all 0.2s ease;
   }
 
   .filter-btn.active {
@@ -272,31 +265,30 @@
   .board-table td {
     padding: 12px 14px;
     border-bottom: 1px solid rgba(30,39,64,0.4);
-    vertical-align: middle;
   }
 
-  .board-table tr:last-child td { border-bottom: none; }
-  .board-table tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+  .board-table tr:nth-child(even) {
+    background: rgba(255,255,255,0.03);
+  }
 
-  .board-table .pick-num {
+  .pick-num {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.25rem;
     color: var(--accent);
     width: 48px;
   }
 
-  .board-table .team-cell {
+  .team-cell {
     font-weight: 600;
-    color: var(--text);
   }
 
-  .board-table .origin-cell {
+  .origin-cell {
     font-family: 'DM Mono', monospace;
     font-size: 0.72rem;
     color: var(--accent2);
   }
 
-  .board-table .same { color: var(--muted); }
+  .same { color: var(--muted); }
 
   .round-header td {
     background: var(--surface);
@@ -327,11 +319,6 @@
     min-width: 140px;
   }
 
-  .year-select:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-
   .info-banner {
     background: rgba(74,157,232,0.1);
     border: 1px solid rgba(74,157,232,0.4);
@@ -340,7 +327,6 @@
     font-family: 'DM Mono', monospace;
     font-size: 0.75rem;
     color: var(--accent2);
-    letter-spacing: 0.5px;
     margin-bottom: 16px;
   }
 
@@ -391,7 +377,6 @@ let state = {
   rosters: [],
   tradedPicks: [],
   drafts: [],
-  upcomingDraft: null,
   ownerMap: {},
   draftDetails: {},
   availableYears: [],
@@ -400,6 +385,10 @@ let state = {
   filterYear: 'all',
   filterTeam: 'all'
 };
+
+function currentSeasonYear() {
+  return String(new Date().getFullYear());
+}
 
 async function fetchJSON(url) {
   const r = await fetch(url);
@@ -424,9 +413,7 @@ async function init() {
     state.drafts = drafts || [];
 
     const userById = {};
-    state.users.forEach(u => {
-      userById[u.user_id] = u;
-    });
+    state.users.forEach(u => userById[u.user_id] = u);
 
     state.rosters.forEach(r => {
       const u = userById[r.owner_id];
@@ -438,20 +425,14 @@ async function init() {
             : 'Team ' + r.roster_id;
     });
 
-    state.draftDetails = {};
-
-    const detailPromises = state.drafts
-      .filter(d => d.draft_id)
-      .map(async d => {
+    await Promise.all(
+      state.drafts.filter(d => d.draft_id).map(async d => {
         try {
           const detail = await fetchJSON('https://api.sleeper.app/v1/draft/' + d.draft_id);
           state.draftDetails[String(d.season)] = detail;
-        } catch(e) {
-          console.warn('Draft detail failed for ' + d.season, e.message);
-        }
-      });
-
-    await Promise.all(detailPromises);
+        } catch(e) {}
+      })
+    );
 
     const yearSet = new Set();
 
@@ -464,18 +445,16 @@ async function init() {
     });
 
     state.availableYears = Array.from(yearSet).sort((a,b) => Number(b) - Number(a));
-    state.selectedDraftYear = state.availableYears[0] || String(new Date().getFullYear() + 1);
 
-    const upcoming =
-      state.drafts
-        .filter(d => d.status !== 'complete')
-        .sort((a,b) => (a.created || 0) - (b.created || 0))[0]
-      ||
-      state.drafts
-        .slice()
-        .sort((a,b) => (b.created || 0) - (a.created || 0))[0];
+    const thisYear = currentSeasonYear();
 
-    state.upcomingDraft = upcoming || null;
+    state.selectedDraftYear = state.availableYears.includes(thisYear)
+      ? thisYear
+      : state.availableYears[0] || thisYear;
+
+    state.filterYear = state.availableYears.includes(thisYear)
+      ? thisYear
+      : 'all';
 
     document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
     renderTab();
@@ -489,7 +468,7 @@ async function init() {
 function showTab(tab) {
   state.activeTab = tab;
 
-  document.querySelectorAll('.tab').forEach((button) => {
+  document.querySelectorAll('.tab').forEach(button => {
     const isActive =
       (tab === 'board' && button.textContent.trim() === 'Draft Board') ||
       (tab === 'traded' && button.textContent.trim() === 'Traded Picks');
@@ -501,16 +480,40 @@ function showTab(tab) {
 }
 
 function renderTab() {
-  if (state.activeTab === 'traded') {
-    renderTradedPicks();
-  } else {
-    renderDraftBoard();
-  }
+  if (state.activeTab === 'traded') renderTradedPicks();
+  else renderDraftBoard();
+}
+
+function sortYearsCurrentFirst(years) {
+  const thisYear = currentSeasonYear();
+
+  return [...years].sort((a,b) => {
+    if (String(a) === thisYear) return -1;
+    if (String(b) === thisYear) return 1;
+    return Number(b) - Number(a);
+  });
+}
+
+function getExactPickSlot(year, originalRosterId, round) {
+  const detail = state.draftDetails[String(year)];
+  if (!detail || !detail.slot_to_roster_id) return '';
+
+  const slotMap = detail.slot_to_roster_id;
+  const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
+  let order = slots.map(s => String(slotMap[String(s)]));
+
+  if (Number(round) % 2 === 0) order = [...order].reverse();
+
+  const index = order.findIndex(rid => String(rid) === String(originalRosterId));
+
+  if (index === -1) return '';
+
+  return `${round}.${String(index + 1).padStart(2, '0')}`;
 }
 
 function renderTradedPicks() {
   const picks = state.tradedPicks;
-  const years = [...new Set(picks.map(p => String(p.season)))].sort((a,b) => Number(b) - Number(a));
+  const years = sortYearsCurrentFirst([...new Set(picks.map(p => String(p.season)))]);
   const teams = Object.entries(state.ownerMap).sort((a,b) => a[1].localeCompare(b[1]));
 
   let filtered = [...picks];
@@ -554,37 +557,35 @@ function renderTradedPicks() {
 
   html += '<div class="picks-grid">';
 
-  Object.keys(grouped).sort((a,b) => Number(b) - Number(a)).forEach(year => {
+  sortYearsCurrentFirst(Object.keys(grouped)).forEach(year => {
     html += `<div class="section-label">${year} Season</div>`;
 
     Object.keys(grouped[year]).sort((a,b) => Number(a) - Number(b)).forEach(round => {
-      grouped[year][round]
-        .sort((a,b) => {
-          const aName = state.ownerMap[String(a.owner_id)] || '';
-          const bName = state.ownerMap[String(b.owner_id)] || '';
-          return aName.localeCompare(bName);
-        })
-        .forEach((p, i) => {
-          const ownerName = state.ownerMap[String(p.owner_id)] || 'Roster ' + p.owner_id;
-          const origName = state.ownerMap[String(p.previous_owner_id)] || 'Roster ' + p.previous_owner_id;
-          const isSame = String(p.owner_id) === String(p.previous_owner_id);
+      grouped[year][round].forEach((p, i) => {
+        const ownerName = state.ownerMap[String(p.owner_id)] || 'Roster ' + p.owner_id;
+        const origName = state.ownerMap[String(p.previous_owner_id)] || 'Roster ' + p.previous_owner_id;
+        const isSame = String(p.owner_id) === String(p.previous_owner_id);
+        const exactSlot = getExactPickSlot(year, p.roster_id, round);
 
-          html += `
-            <div class="pick-card" style="animation-delay:${i * 30}ms">
-              <div>
-                <div class="pick-year">${year}</div>
-                <div class="pick-round">RD ${round}</div>
-              </div>
-
-              <div>
-                <div class="pick-owner">${ownerName}</div>
-                <div class="pick-origin">${isSame ? 'Original pick' : `From <span>${origName}</span>`}</div>
-              </div>
-
-              <div class="pick-type ${isSame ? 'kept' : 'traded'}">${isSame ? 'OWN' : 'TRADED'}</div>
+        html += `
+          <div class="pick-card" style="animation-delay:${i * 30}ms">
+            <div>
+              <div class="pick-year">${exactSlot || year}</div>
+              <div class="pick-round">${exactSlot ? year : 'RD ' + round}</div>
             </div>
-          `;
-        });
+
+            <div>
+              <div class="pick-owner">${ownerName}</div>
+              <div class="pick-origin">
+                ${isSame ? 'Original pick' : `From <span>${origName}</span>`}
+                ${exactSlot ? `<br><span>Exact pick: ${exactSlot}</span>` : ''}
+              </div>
+            </div>
+
+            <div class="pick-type ${isSame ? 'kept' : 'traded'}">${isSame ? 'OWN' : 'TRADED'}</div>
+          </div>
+        `;
+      });
     });
   });
 
@@ -634,7 +635,7 @@ function renderDraftBoard() {
   const detail = state.draftDetails[String(year)];
 
   let snakeOrder = [];
-  let isProjected = true;
+  let hasExactDraftOrder = false;
   let numRounds = 5;
 
   if (detail && detail.slot_to_roster_id) {
@@ -642,7 +643,7 @@ function renderDraftBoard() {
     const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
 
     snakeOrder = slots.map(s => String(slotMap[String(s)]));
-    isProjected = false;
+    hasExactDraftOrder = true;
 
     if (detail.settings && detail.settings.rounds) {
       numRounds = parseInt(detail.settings.rounds, 10);
@@ -673,10 +674,10 @@ function renderDraftBoard() {
     </div>
   `;
 
-  if (isProjected) {
-    html += `<div class="info-banner">Future / Projected Draft — Sequential order until real Sleeper draft order exists</div>`;
-  } else {
+  if (hasExactDraftOrder) {
     html += `<div class="info-banner">Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams</div>`;
+  } else {
+    html += `<div class="info-banner">Draft order not available yet — pick numbers left blank</div>`;
   }
 
   html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
@@ -686,19 +687,18 @@ function renderDraftBoard() {
   for (let round = 1; round <= numRounds; round++) {
     html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
 
-    let roundOrder;
-
-    if (!isProjected) {
-      roundOrder = round % 2 === 0 ? [...snakeOrder].reverse() : snakeOrder;
-    } else {
-      roundOrder = snakeOrder;
-    }
+    let roundOrder = hasExactDraftOrder && round % 2 === 0
+      ? [...snakeOrder].reverse()
+      : snakeOrder;
 
     roundOrder.forEach((origRosterId, idx) => {
-      const slot = `${round}.${String(idx + 1).padStart(2, '0')}`;
-      const key = String(origRosterId) + '_' + String(round);
+      const slot = hasExactDraftOrder
+        ? `${round}.${String(idx + 1).padStart(2, '0')}`
+        : '';
 
+      const key = String(origRosterId) + '_' + String(round);
       const currentOwner = finalOwnerMap[key] || String(origRosterId);
+
       const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
       const curName = state.ownerMap[String(currentOwner)] || 'Roster ' + currentOwner;
       const isSame = String(currentOwner) === String(origRosterId);
@@ -714,7 +714,6 @@ function renderDraftBoard() {
   }
 
   html += `</tbody></table></div>`;
-
   document.getElementById('mainContent').innerHTML = html;
 }
 
