@@ -343,15 +343,6 @@ body {
   font-size:.9rem;
 }
 
-.note-date {
-  font-family:'DM Mono', monospace;
-  font-size:.65rem;
-  color:var(--muted);
-  letter-spacing:1px;
-  text-transform:uppercase;
-  margin-top:10px;
-}
-
 .note-form {
   display:none;
   background:rgba(0,0,0,.22);
@@ -423,10 +414,25 @@ body {
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyB5FkmXaE_lgjZlowSBYN6NyLsiZV7FnyE",
+  authDomain: "fantasy-football-f9b7a.firebaseapp.com",
+  projectId: "fantasy-football-f9b7a",
+  storageBucket: "fantasy-football-f9b7a.firebasestorage.app",
+  messagingSenderId: "522378837469",
+  appId: "1:522378837469:web:ae6c00679bb62246b3ca34"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 const LEAGUE_ID = '1330745662001659904';
 const NOTE_PASSCODE = '2325';
-const NOTES_STORAGE_KEY = 'fantasy_football_league_notes_v1';
+const NOTES_COLLECTION = 'leagueNotes';
 
 const REAL_NAME_BY_SLEEPER_TEAM = {
   'nacua matada': 'Jaren',
@@ -452,7 +458,8 @@ let state = {
   selectedDraftYear:null,
   selectedTeamRosterId:null,
   activeTab:'board',
-  notesUnlocked:false
+  notesUnlocked:false,
+  notes:[]
 };
 
 function normalizeName(name) {
@@ -483,7 +490,8 @@ async function init() {
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/rosters'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/traded_picks'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts'),
-      fetchJSON('https://api.sleeper.app/v1/players/nfl')
+      fetchJSON('https://api.sleeper.app/v1/players/nfl'),
+      loadNotes()
     ]);
 
     state.league = league;
@@ -863,16 +871,16 @@ function selectDraftYear(year) {
   renderDraftBoard();
 }
 
-function getNotes() {
-  try {
-    return JSON.parse(localStorage.getItem(NOTES_STORAGE_KEY)) || [];
-  } catch(e) {
-    return [];
-  }
-}
+async function loadNotes() {
+  const snap = await db
+    .collection(NOTES_COLLECTION)
+    .orderBy('createdAt', 'desc')
+    .get();
 
-function saveNotes(notes) {
-  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+  state.notes = snap.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
 }
 
 function unlockNotes() {
@@ -902,7 +910,7 @@ function showNoteForm() {
   if (form) form.classList.add('active');
 }
 
-function addNote() {
+async function addNote() {
   const header = document.getElementById('noteHeader').value.trim();
   const description = document.getElementById('noteDescription').value.trim();
 
@@ -911,29 +919,23 @@ function addNote() {
     return;
   }
 
-  const notes = getNotes();
-
-  notes.unshift({
+  await db.collection(NOTES_COLLECTION).add({
     header,
     description,
-    date: new Date().toLocaleDateString()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 
-  saveNotes(notes);
+  await loadNotes();
   renderLeagueNotes();
 }
 
 function renderLeagueNotes() {
-  const notes = getNotes();
-
   let html = `
     <div class="notes-panel">
       <div class="notes-top">
         <h2>League Notes</h2>
         <button class="edit-btn" onclick="showNoteForm()">Edit</button>
       </div>
-
-      <div class="info-banner">Official league record. Editing requires commissioner passcode.</div>
 
       <div class="note-form" id="noteForm">
         <input class="note-input" id="noteHeader" placeholder="Note Header">
@@ -947,15 +949,14 @@ function renderLeagueNotes() {
       <div class="notes-list">
   `;
 
-  if (!notes.length) {
+  if (!state.notes.length) {
     html += `<div class="empty">No league notes added yet</div>`;
   } else {
-    notes.forEach(note => {
+    state.notes.forEach(note => {
       html += `
         <div class="note-card">
-          <h3>${note.header}</h3>
-          <p>${note.description}</p>
-          <div class="note-date">Recorded ${note.date}</div>
+          <h3>${note.header || ''}</h3>
+          <p>${note.description || ''}</p>
         </div>
       `;
     });
