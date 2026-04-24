@@ -252,7 +252,7 @@ body {
   color:var(--accent);
 }
 
-.close-btn, .edit-btn, .save-btn, .cancel-btn {
+.close-btn, .edit-btn, .save-btn, .cancel-btn, .delete-btn {
   background:none;
   border:1px solid var(--border);
   color:var(--muted);
@@ -265,6 +265,11 @@ body {
 .edit-btn, .save-btn {
   border-color:var(--accent);
   color:var(--accent);
+}
+
+.delete-btn {
+  border-color:var(--danger);
+  color:var(--danger);
 }
 
 .detail-grid {
@@ -330,6 +335,13 @@ body {
   padding:16px;
 }
 
+.note-card-top {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+
 .note-card h3 {
   font-family:'Bebas Neue', sans-serif;
   letter-spacing:1.5px;
@@ -341,6 +353,12 @@ body {
 .note-card p {
   color:var(--text);
   font-size:.9rem;
+}
+
+.note-card-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
 }
 
 .note-form {
@@ -459,6 +477,7 @@ let state = {
   selectedTeamRosterId:null,
   activeTab:'board',
   notesUnlocked:false,
+  editingNoteId:null,
   notes:[]
 };
 
@@ -490,8 +509,7 @@ async function init() {
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/rosters'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/traded_picks'),
       fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts'),
-      fetchJSON('https://api.sleeper.app/v1/players/nfl'),
-      loadNotes()
+      fetchJSON('https://api.sleeper.app/v1/players/nfl')
     ]);
 
     state.league = league;
@@ -537,6 +555,8 @@ async function init() {
     state.selectedDraftYear = state.availableYears.includes(thisYear)
       ? thisYear
       : state.availableYears[0] || thisYear;
+
+    await loadNotes();
 
     document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
     renderTab();
@@ -894,23 +914,71 @@ function unlockNotes() {
   }
 }
 
-function cancelNote() {
-  document.getElementById('noteHeader').value = '';
-  document.getElementById('noteDescription').value = '';
-  document.getElementById('noteForm').classList.remove('active');
-}
-
 function showNoteForm() {
   if (!state.notesUnlocked) {
     unlockNotes();
     return;
   }
 
+  state.editingNoteId = null;
+
   const form = document.getElementById('noteForm');
+  const header = document.getElementById('noteHeader');
+  const description = document.getElementById('noteDescription');
+  const saveButton = document.getElementById('noteSaveButton');
+
+  if (header) header.value = '';
+  if (description) description.value = '';
+  if (saveButton) saveButton.textContent = 'Save Note';
   if (form) form.classList.add('active');
 }
 
-async function addNote() {
+function cancelNote() {
+  state.editingNoteId = null;
+
+  const header = document.getElementById('noteHeader');
+  const description = document.getElementById('noteDescription');
+  const form = document.getElementById('noteForm');
+  const saveButton = document.getElementById('noteSaveButton');
+
+  if (header) header.value = '';
+  if (description) description.value = '';
+  if (saveButton) saveButton.textContent = 'Save Note';
+  if (form) form.classList.remove('active');
+}
+
+function editExistingNote(noteId) {
+  if (!state.notesUnlocked) {
+    unlockNotes();
+    return;
+  }
+
+  const note = state.notes.find(n => n.id === noteId);
+  if (!note) return;
+
+  state.editingNoteId = noteId;
+
+  const form = document.getElementById('noteForm');
+  const header = document.getElementById('noteHeader');
+  const description = document.getElementById('noteDescription');
+  const saveButton = document.getElementById('noteSaveButton');
+
+  if (header) header.value = note.header || '';
+  if (description) description.value = note.description || '';
+  if (saveButton) saveButton.textContent = 'Update Note';
+  if (form) form.classList.add('active');
+
+  setTimeout(() => {
+    if (form) form.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 50);
+}
+
+async function saveNote() {
+  if (!state.notesUnlocked) {
+    unlockNotes();
+    return;
+  }
+
   const header = document.getElementById('noteHeader').value.trim();
   const description = document.getElementById('noteDescription').value.trim();
 
@@ -919,11 +987,36 @@ async function addNote() {
     return;
   }
 
-  await db.collection(NOTES_COLLECTION).add({
-    header,
-    description,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
+  if (state.editingNoteId) {
+    await db.collection(NOTES_COLLECTION).doc(state.editingNoteId).update({
+      header,
+      description,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } else {
+    await db.collection(NOTES_COLLECTION).add({
+      header,
+      description,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  state.editingNoteId = null;
+  await loadNotes();
+  renderLeagueNotes();
+}
+
+async function deleteNote(noteId) {
+  if (!state.notesUnlocked) {
+    unlockNotes();
+    return;
+  }
+
+  const ok = confirm('Delete this league note?');
+  if (!ok) return;
+
+  await db.collection(NOTES_COLLECTION).doc(noteId).delete();
 
   await loadNotes();
   renderLeagueNotes();
@@ -941,7 +1034,7 @@ function renderLeagueNotes() {
         <input class="note-input" id="noteHeader" placeholder="Note Header">
         <textarea class="note-textarea" id="noteDescription" placeholder="Brief Description"></textarea>
         <div class="note-actions">
-          <button class="save-btn" onclick="addNote()">Save Note</button>
+          <button class="save-btn" id="noteSaveButton" onclick="saveNote()">Save Note</button>
           <button class="cancel-btn" onclick="cancelNote()">Cancel</button>
         </div>
       </div>
@@ -955,8 +1048,19 @@ function renderLeagueNotes() {
     state.notes.forEach(note => {
       html += `
         <div class="note-card">
-          <h3>${note.header || ''}</h3>
-          <p>${note.description || ''}</p>
+          <div class="note-card-top">
+            <div>
+              <h3>${note.header || ''}</h3>
+              <p>${note.description || ''}</p>
+            </div>
+
+            ${state.notesUnlocked ? `
+              <div class="note-card-actions">
+                <button class="edit-btn" onclick="editExistingNote('${note.id}')">Edit</button>
+                <button class="delete-btn" onclick="deleteNote('${note.id}')">Delete</button>
+              </div>
+            ` : ''}
+          </div>
         </div>
       `;
     });
