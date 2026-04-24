@@ -385,7 +385,11 @@ body {
   color:var(--muted);
   letter-spacing:2px;
   text-transform:uppercase;
-  margin-bottom:10px;
+  margin:16px 0 10px;
+}
+
+.detail-title:first-child {
+  margin-top:0;
 }
 
 .roster-list, .owned-picks-list {
@@ -418,7 +422,7 @@ body {
   background:var(--card);
   border:1px solid var(--border);
   border-radius:8px;
-  padding:24px;
+  padding:18px;
   color:var(--muted);
   font-family:'DM Mono', monospace;
   text-align:center;
@@ -685,6 +689,7 @@ function getAllOwnedPicks(rosterId) {
 function selectTeam(rosterId) {
   state.selectedTeamRosterId = String(rosterId);
   renderDraftBoard();
+
   setTimeout(() => {
     const panel = document.getElementById('teamPanel');
     if (panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -709,33 +714,55 @@ function playerPosition(playerId) {
   return p.position || '';
 }
 
+function playerRow(pid) {
+  return `
+    <div class="roster-row">
+      <span class="player-name">${playerDisplayName(pid)}</span>
+      <span class="player-pos">${playerPosition(pid)}</span>
+    </div>
+  `;
+}
+
+function playerSection(title, list) {
+  return `
+    <div class="detail-title">${title}</div>
+    <div class="roster-list">
+      ${list.length ? list.map(playerRow).join('') : '<div class="empty">None</div>'}
+    </div>
+  `;
+}
+
 function renderTeamPanel() {
   const rosterId = state.selectedTeamRosterId;
   if (!rosterId) return '';
 
   const teamName = state.ownerMap[String(rosterId)] || 'Roster ' + rosterId;
   const roster = state.rosters.find(r => String(r.roster_id) === String(rosterId));
-  const playerIds = roster && roster.players ? roster.players : [];
   const ownedPicks = getAllOwnedPicks(rosterId);
 
-  const rosterHtml = playerIds.length
-    ? playerIds
-        .map(pid => ({
-          id: pid,
-          name: playerDisplayName(pid),
-          pos: playerPosition(pid)
-        }))
-        .sort((a,b) => {
-          const order = { QB:1, RB:2, WR:3, TE:4, K:5, DEF:6 };
-          return (order[a.pos] || 99) - (order[b.pos] || 99) || a.name.localeCompare(b.name);
-        })
-        .map(p => `
-          <div class="roster-row">
-            <span class="player-name">${p.name}</span>
-            <span class="player-pos">${p.pos}</span>
-          </div>
-        `).join('')
-    : '<div class="empty">No roster found</div>';
+  if (!roster) {
+    return `
+      <div class="team-panel" id="teamPanel">
+        <div class="team-panel-top">
+          <h2>${teamName}</h2>
+          <button class="close-btn" onclick="clearSelectedTeam()">Close</button>
+        </div>
+        <div class="empty">No roster found</div>
+      </div>
+    `;
+  }
+
+  const starters = roster.starters || [];
+  const allPlayers = roster.players || [];
+  const injured = roster.reserve || [];
+
+  const starterSet = new Set(starters.map(String));
+  const injuredSet = new Set(injured.map(String));
+
+  const bench = allPlayers.filter(pid =>
+    !starterSet.has(String(pid)) &&
+    !injuredSet.has(String(pid))
+  );
 
   const picksHtml = ownedPicks.length
     ? ownedPicks.map(p => `
@@ -757,12 +784,13 @@ function renderTeamPanel() {
 
       <div class="detail-grid">
         <div class="detail-box">
-          <div class="detail-title">Roster</div>
-          <div class="roster-list">${rosterHtml}</div>
+          ${playerSection('Starters', starters)}
+          ${playerSection('Bench', bench)}
+          ${playerSection('Injured / Reserve', injured)}
         </div>
 
         <div class="detail-box">
-          <div class="detail-title">Current Draft Picks Owned</div>
+          <div class="detail-title">Draft Picks</div>
           <div class="owned-picks-list">${picksHtml}</div>
         </div>
       </div>
