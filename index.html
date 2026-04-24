@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dynasty Pick Tracker</title>
+<title>Fantasy Football</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&display=swap');
 
@@ -62,6 +62,33 @@ body {
   color:var(--muted);
   letter-spacing:2px;
   text-transform:uppercase;
+}
+
+.tabs {
+  display:flex;
+  gap:8px;
+  margin-top:16px;
+  flex-wrap:wrap;
+}
+
+.tab {
+  background:none;
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  padding:10px 20px;
+  border-radius:9999px;
+  cursor:pointer;
+}
+
+.tab.active {
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#000;
+  font-weight:600;
 }
 
 .content { padding:24px 16px; }
@@ -202,7 +229,7 @@ body {
   border-bottom:2px solid var(--border);
 }
 
-.team-panel {
+.team-panel, .notes-panel {
   margin-top:22px;
   background:var(--card);
   border:1px solid var(--border);
@@ -210,7 +237,7 @@ body {
   padding:18px;
 }
 
-.team-panel-top {
+.team-panel-top, .notes-top {
   display:flex;
   justify-content:space-between;
   align-items:center;
@@ -218,21 +245,26 @@ body {
   margin-bottom:14px;
 }
 
-.team-panel h2 {
+.team-panel h2, .notes-top h2 {
   font-family:'Bebas Neue', sans-serif;
   font-size:1.8rem;
   letter-spacing:2px;
   color:var(--accent);
 }
 
-.close-btn {
+.close-btn, .edit-btn, .save-btn, .cancel-btn {
   background:none;
   border:1px solid var(--border);
   color:var(--muted);
   border-radius:999px;
-  padding:6px 12px;
+  padding:8px 14px;
   font-family:'DM Mono', monospace;
   cursor:pointer;
+}
+
+.edit-btn, .save-btn {
+  border-color:var(--accent);
+  color:var(--accent);
 }
 
 .detail-grid {
@@ -265,7 +297,7 @@ body {
   margin-top:0;
 }
 
-.roster-list, .owned-picks-list {
+.roster-list, .owned-picks-list, .notes-list {
   display:flex;
   flex-direction:column;
   gap:8px;
@@ -291,6 +323,68 @@ body {
   color:var(--muted);
 }
 
+.note-card {
+  background:rgba(0,0,0,.22);
+  border:1px solid rgba(232,200,74,.22);
+  border-radius:10px;
+  padding:16px;
+}
+
+.note-card h3 {
+  font-family:'Bebas Neue', sans-serif;
+  letter-spacing:1.5px;
+  color:var(--accent);
+  font-size:1.35rem;
+  margin-bottom:6px;
+}
+
+.note-card p {
+  color:var(--text);
+  font-size:.9rem;
+}
+
+.note-date {
+  font-family:'DM Mono', monospace;
+  font-size:.65rem;
+  color:var(--muted);
+  letter-spacing:1px;
+  text-transform:uppercase;
+  margin-top:10px;
+}
+
+.note-form {
+  display:none;
+  background:rgba(0,0,0,.22);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+  margin-bottom:16px;
+}
+
+.note-form.active { display:block; }
+
+.note-input, .note-textarea {
+  width:100%;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  padding:12px;
+  margin-bottom:10px;
+}
+
+.note-textarea {
+  min-height:90px;
+  resize:vertical;
+}
+
+.note-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
 .empty, .error-msg {
   background:var(--card);
   border:1px solid var(--border);
@@ -312,8 +406,13 @@ body {
 
 <div class="header">
   <div class="header-top">
-    <h1>Pick Tracker</h1>
+    <h1>Fantasy Football</h1>
     <span class="league-name" id="leagueName">Loading...</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('board')">Draft Board</button>
+    <button class="tab" onclick="showTab('notes')">League Notes</button>
   </div>
 </div>
 
@@ -326,6 +425,8 @@ body {
 
 <script>
 const LEAGUE_ID = '1330745662001659904';
+const NOTE_PASSCODE = '2325';
+const NOTES_STORAGE_KEY = 'fantasy_football_league_notes_v1';
 
 const REAL_NAME_BY_SLEEPER_TEAM = {
   'nacua matada': 'Jaren',
@@ -349,7 +450,9 @@ let state = {
   draftDetails:{},
   availableYears:[],
   selectedDraftYear:null,
-  selectedTeamRosterId:null
+  selectedTeamRosterId:null,
+  activeTab:'board',
+  notesUnlocked:false
 };
 
 function normalizeName(name) {
@@ -397,7 +500,6 @@ async function init() {
       const u = userById[r.owner_id];
       const sleeperTeamName = getSleeperTeamName(u, r.roster_id);
       const realName = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
-
       state.ownerMap[String(r.roster_id)] = realName;
     });
 
@@ -429,12 +531,29 @@ async function init() {
       : state.availableYears[0] || thisYear;
 
     document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
-    renderDraftBoard();
+    renderTab();
 
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
       '<div class="error-msg">Failed to load: ' + e.message + '</div>';
   }
+}
+
+function showTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.tab').forEach(button => {
+    const active =
+      (tab === 'board' && button.textContent.trim() === 'Draft Board') ||
+      (tab === 'notes' && button.textContent.trim() === 'League Notes');
+
+    button.classList.toggle('active', active);
+  });
+  renderTab();
+}
+
+function renderTab() {
+  if (state.activeTab === 'notes') renderLeagueNotes();
+  else renderDraftBoard();
 }
 
 function getExactPickSlot(year, originalRosterId, round) {
@@ -742,6 +861,112 @@ function renderDraftBoard() {
 function selectDraftYear(year) {
   state.selectedDraftYear = year;
   renderDraftBoard();
+}
+
+function getNotes() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTES_STORAGE_KEY)) || [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveNotes(notes) {
+  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+}
+
+function unlockNotes() {
+  const pass = prompt('Enter league notes passcode:');
+
+  if (pass === NOTE_PASSCODE) {
+    state.notesUnlocked = true;
+    renderLeagueNotes();
+  } else if (pass !== null) {
+    alert('Incorrect passcode.');
+  }
+}
+
+function cancelNote() {
+  document.getElementById('noteHeader').value = '';
+  document.getElementById('noteDescription').value = '';
+  document.getElementById('noteForm').classList.remove('active');
+}
+
+function showNoteForm() {
+  if (!state.notesUnlocked) {
+    unlockNotes();
+    return;
+  }
+
+  const form = document.getElementById('noteForm');
+  if (form) form.classList.add('active');
+}
+
+function addNote() {
+  const header = document.getElementById('noteHeader').value.trim();
+  const description = document.getElementById('noteDescription').value.trim();
+
+  if (!header || !description) {
+    alert('Add both a header and description.');
+    return;
+  }
+
+  const notes = getNotes();
+
+  notes.unshift({
+    header,
+    description,
+    date: new Date().toLocaleDateString()
+  });
+
+  saveNotes(notes);
+  renderLeagueNotes();
+}
+
+function renderLeagueNotes() {
+  const notes = getNotes();
+
+  let html = `
+    <div class="notes-panel">
+      <div class="notes-top">
+        <h2>League Notes</h2>
+        <button class="edit-btn" onclick="showNoteForm()">Edit</button>
+      </div>
+
+      <div class="info-banner">Official league record. Editing requires commissioner passcode.</div>
+
+      <div class="note-form" id="noteForm">
+        <input class="note-input" id="noteHeader" placeholder="Note Header">
+        <textarea class="note-textarea" id="noteDescription" placeholder="Brief Description"></textarea>
+        <div class="note-actions">
+          <button class="save-btn" onclick="addNote()">Save Note</button>
+          <button class="cancel-btn" onclick="cancelNote()">Cancel</button>
+        </div>
+      </div>
+
+      <div class="notes-list">
+  `;
+
+  if (!notes.length) {
+    html += `<div class="empty">No league notes added yet</div>`;
+  } else {
+    notes.forEach(note => {
+      html += `
+        <div class="note-card">
+          <h3>${note.header}</h3>
+          <p>${note.description}</p>
+          <div class="note-date">Recorded ${note.date}</div>
+        </div>
+      `;
+    });
+  }
+
+  html += `
+      </div>
+    </div>
+  `;
+
+  document.getElementById('mainContent').innerHTML = html;
 }
 
 init();
