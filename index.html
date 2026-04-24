@@ -359,6 +359,7 @@ body {
   display:flex;
   gap:8px;
   flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
 .note-form {
@@ -892,15 +893,20 @@ function selectDraftYear(year) {
 }
 
 async function loadNotes() {
-  const snap = await db
-    .collection(NOTES_COLLECTION)
-    .orderBy('createdAt', 'desc')
-    .get();
+  const snap = await db.collection(NOTES_COLLECTION).get();
 
-  state.notes = snap.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  state.notes = snap.docs.map((doc, index) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      order: data.order ?? index,
+      ...data
+    };
+  }).sort((a,b) => {
+    const ao = a.order ?? 9999;
+    const bo = b.order ?? 9999;
+    return ao - bo;
+  });
 }
 
 function unlockNotes() {
@@ -997,12 +1003,45 @@ async function saveNote() {
     await db.collection(NOTES_COLLECTION).add({
       header,
       description,
+      order: state.notes.length,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }
 
   state.editingNoteId = null;
+  await loadNotes();
+  renderLeagueNotes();
+}
+
+async function moveNote(noteId, direction) {
+  if (!state.notesUnlocked) {
+    unlockNotes();
+    return;
+  }
+
+  const index = state.notes.findIndex(n => n.id === noteId);
+  if (index === -1) return;
+
+  const swapIndex = direction === 'up' ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= state.notes.length) return;
+
+  const current = state.notes[index];
+  const swap = state.notes[swapIndex];
+
+  const currentOrder = current.order ?? index;
+  const swapOrder = swap.order ?? swapIndex;
+
+  await db.collection(NOTES_COLLECTION).doc(current.id).update({
+    order: swapOrder,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  await db.collection(NOTES_COLLECTION).doc(swap.id).update({
+    order: currentOrder,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
   await loadNotes();
   renderLeagueNotes();
 }
@@ -1017,6 +1056,15 @@ async function deleteNote(noteId) {
   if (!ok) return;
 
   await db.collection(NOTES_COLLECTION).doc(noteId).delete();
+
+  await loadNotes();
+
+  const batch = db.batch();
+  state.notes.forEach((note, index) => {
+    const ref = db.collection(NOTES_COLLECTION).doc(note.id);
+    batch.update(ref, { order: index });
+  });
+  await batch.commit();
 
   await loadNotes();
   renderLeagueNotes();
@@ -1045,7 +1093,7 @@ function renderLeagueNotes() {
   if (!state.notes.length) {
     html += `<div class="empty">No league notes added yet</div>`;
   } else {
-    state.notes.forEach(note => {
+    state.notes.forEach((note, index) => {
       html += `
         <div class="note-card">
           <div class="note-card-top">
@@ -1056,6 +1104,8 @@ function renderLeagueNotes() {
 
             ${state.notesUnlocked ? `
               <div class="note-card-actions">
+                <button class="edit-btn" onclick="moveNote('${note.id}', 'up')" ${index === 0 ? 'disabled' : ''}>↑</button>
+                <button class="edit-btn" onclick="moveNote('${note.id}', 'down')" ${index === state.notes.length - 1 ? 'disabled' : ''}>↓</button>
                 <button class="edit-btn" onclick="editExistingNote('${note.id}')">Edit</button>
                 <button class="delete-btn" onclick="deleteNote('${note.id}')">Delete</button>
               </div>
