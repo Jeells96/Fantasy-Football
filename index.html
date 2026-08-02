@@ -199,6 +199,44 @@ body {
   width:48px;
 }
 
+.overall-num {
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  color:var(--accent2);
+  white-space:nowrap;
+  width:60px;
+}
+
+.injury-tag {
+  font-family:'DM Mono', monospace;
+  font-size:.62rem;
+  color:var(--danger);
+  border:1px solid rgba(232,74,106,.4);
+  border-radius:4px;
+  padding:1px 5px;
+  margin-left:8px;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  white-space:nowrap;
+}
+
+.record-line {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+  letter-spacing:1px;
+  margin-top:4px;
+}
+
+.roster-mix {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--accent2);
+  margin-bottom:12px;
+  padding-bottom:10px;
+  border-bottom:1px solid var(--border);
+}
+
 .team-cell { font-weight:600; }
 
 .team-link {
@@ -421,8 +459,9 @@ body {
   </div>
 
   <div class="tabs">
-    <button class="tab active" onclick="showTab('board')">Draft Board</button>
-    <button class="tab" onclick="showTab('notes')">League Notes</button>
+    <button class="tab active" data-tab="board" onclick="showTab('board')">Draft Board</button>
+    <button class="tab" data-tab="standings" onclick="showTab('standings')">Standings</button>
+    <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
   </div>
 </div>
 
@@ -559,7 +598,10 @@ async function init() {
 
     await loadNotes();
 
-    document.getElementById('leagueName').textContent = league.name || 'Dynasty League';
+    const headerBits = [league.name || 'Dynasty League'];
+    if (league.season) headerBits.push(league.season);
+    if (league.total_rosters) headerBits.push(league.total_rosters + ' Teams');
+    document.getElementById('leagueName').textContent = headerBits.join(' · ');
     renderTab();
 
   } catch(e) {
@@ -571,34 +613,43 @@ async function init() {
 function showTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll('.tab').forEach(button => {
-    const active =
-      (tab === 'board' && button.textContent.trim() === 'Draft Board') ||
-      (tab === 'notes' && button.textContent.trim() === 'League Notes');
-
-    button.classList.toggle('active', active);
+    button.classList.toggle('active', button.dataset.tab === tab);
   });
   renderTab();
 }
 
 function renderTab() {
   if (state.activeTab === 'notes') renderLeagueNotes();
+  else if (state.activeTab === 'standings') renderStandings();
   else renderDraftBoard();
 }
 
-function getExactPickSlot(year, originalRosterId, round) {
+function isSnakeDraft(detail) {
+  return !detail || !detail.type || detail.type !== 'linear';
+}
+
+function getPickPosition(year, originalRosterId, round) {
   const detail = state.draftDetails[String(year)];
-  if (!detail || !detail.slot_to_roster_id) return '';
+  if (!detail || !detail.slot_to_roster_id) return null;
 
   const slotMap = detail.slot_to_roster_id;
   const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
   let order = slots.map(s => String(slotMap[String(s)]));
 
-  if (Number(round) % 2 === 0) order = [...order].reverse();
+  if (isSnakeDraft(detail) && Number(round) % 2 === 0) order = [...order].reverse();
 
   const index = order.findIndex(rid => String(rid) === String(originalRosterId));
-  if (index === -1) return '';
+  if (index === -1) return null;
 
-  return `${round}.${String(index + 1).padStart(2, '0')}`;
+  return {
+    slot: `${round}.${String(index + 1).padStart(2, '0')}`,
+    overall: (Number(round) - 1) * order.length + index + 1
+  };
+}
+
+function getExactPickSlot(year, originalRosterId, round) {
+  const pos = getPickPosition(year, originalRosterId, round);
+  return pos ? pos.slot : '';
 }
 
 function buildFinalOwnerMap(yearPicks) {
@@ -663,13 +714,14 @@ function getAllOwnedPicks(rosterId) {
         const currentOwner = getCurrentOwnerForPick(year, originalRosterId, round);
 
         if (String(currentOwner) === String(rosterId)) {
-          const exactSlot = getExactPickSlot(year, originalRosterId, round);
+          const pos = getPickPosition(year, originalRosterId, round);
           const origName = state.ownerMap[String(originalRosterId)] || 'Roster ' + originalRosterId;
 
           owned.push({
             year,
             round,
-            exactSlot,
+            exactSlot: pos ? pos.slot : '',
+            overall: pos ? pos.overall : null,
             originalRosterId,
             origName
           });
@@ -687,7 +739,9 @@ function getAllOwnedPicks(rosterId) {
 
 function selectTeam(rosterId) {
   state.selectedTeamRosterId = String(rosterId);
-  renderDraftBoard();
+
+  if (state.activeTab !== 'board') showTab('board');
+  else renderDraftBoard();
 
   setTimeout(() => {
     const panel = document.getElementById('teamPanel');
@@ -707,28 +761,74 @@ function playerDisplayName(playerId) {
   return p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player ' + playerId;
 }
 
-function playerPosition(playerId) {
+function playerMeta(playerId) {
   const p = state.players[String(playerId)];
   if (!p) return '';
-  return p.position || '';
+
+  const parts = [];
+  if (p.position) parts.push(p.position);
+  if (p.team) parts.push(p.team);
+  if (p.age) parts.push('Age ' + p.age);
+
+  return parts.join(' · ');
+}
+
+function playerInjuryTag(playerId) {
+  const p = state.players[String(playerId)];
+  if (!p || !p.injury_status) return '';
+  return `<span class="injury-tag">${p.injury_status}</span>`;
 }
 
 function playerRow(pid) {
   return `
     <div class="roster-row">
-      <span class="player-name">${playerDisplayName(pid)}</span>
-      <span class="player-pos">${playerPosition(pid)}</span>
+      <span class="player-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}</span>
+      <span class="player-pos">${playerMeta(pid)}</span>
     </div>
   `;
 }
 
 function playerSection(title, list) {
   return `
-    <div class="detail-title">${title}</div>
+    <div class="detail-title">${title} (${list.length})</div>
     <div class="roster-list">
       ${list.length ? list.map(playerRow).join('') : '<div class="empty">None</div>'}
     </div>
   `;
+}
+
+function getTeamRecord(roster) {
+  const s = (roster && roster.settings) || {};
+  return {
+    wins: s.wins || 0,
+    losses: s.losses || 0,
+    ties: s.ties || 0,
+    pf: (s.fpts || 0) + (s.fpts_decimal || 0) / 100,
+    pa: (s.fpts_against || 0) + (s.fpts_against_decimal || 0) / 100
+  };
+}
+
+function formatRecord(rec) {
+  return rec.wins + '-' + rec.losses + (rec.ties ? '-' + rec.ties : '');
+}
+
+function rosterPositionMix(playerIds) {
+  const counts = {};
+
+  playerIds.forEach(pid => {
+    const p = state.players[String(pid)];
+    const pos = (p && p.position) || 'N/A';
+    counts[pos] = (counts[pos] || 0) + 1;
+  });
+
+  const order = ['QB','RB','WR','TE','K','DEF'];
+  const known = order.filter(pos => counts[pos]).map(pos => counts[pos] + ' ' + pos);
+  const other = Object.keys(counts)
+    .filter(pos => !order.includes(pos))
+    .sort()
+    .map(pos => counts[pos] + ' ' + pos);
+
+  return known.concat(other).join(' · ');
 }
 
 function renderTeamPanel() {
@@ -768,21 +868,29 @@ function renderTeamPanel() {
         <div class="owned-pick-row">
           <div>
             <div class="owned-pick-main">${p.exactSlot ? p.exactSlot : p.year + ' Round ' + p.round}</div>
-            <div class="owned-pick-sub">${p.year} · Original: ${p.origName}</div>
+            <div class="owned-pick-sub">${p.year}${p.overall ? ' · Pick #' + p.overall : ''} · Original: ${p.origName}</div>
           </div>
         </div>
       `).join('')
     : '<div class="empty">No picks found</div>';
 
+  const rec = getTeamRecord(roster);
+  const hasPlayed = (rec.wins + rec.losses + rec.ties) > 0 || rec.pf > 0;
+  const mix = rosterPositionMix(allPlayers);
+
   return `
     <div class="team-panel" id="teamPanel">
       <div class="team-panel-top">
-        <h2>${teamName}</h2>
+        <div>
+          <h2>${teamName}</h2>
+          ${hasPlayed ? `<div class="record-line">${formatRecord(rec)} · ${rec.pf.toFixed(1)} PF · ${rec.pa.toFixed(1)} PA</div>` : ''}
+        </div>
         <button class="close-btn" onclick="clearSelectedTeam()">Close</button>
       </div>
 
       <div class="detail-grid">
         <div class="detail-box">
+          ${mix ? `<div class="roster-mix">${mix}</div>` : ''}
           ${playerSection('Starters', starters)}
           ${playerSection('Bench', bench)}
           ${playerSection('Injured / Reserve', injured)}
@@ -843,19 +951,29 @@ function renderDraftBoard() {
   `;
 
   if (hasExactDraftOrder) {
-    html += `<div class="info-banner">Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams</div>`;
+    let banner = `Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams`;
+
+    if (detail && detail.status === 'pre_draft' && detail.start_time) {
+      banner += ' · Draft: ' + new Date(detail.start_time).toLocaleString(undefined, {
+        month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'
+      });
+    }
+
+    html += `<div class="info-banner">${banner}</div>`;
   } else {
     html += `<div class="info-banner">Draft order not available yet — pick numbers left blank</div>`;
   }
 
   html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
   html += `<div class="draft-board"><table class="board-table">`;
-  html += `<thead><tr><th>#</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
+  html += `<thead><tr><th>Pick</th><th>Overall</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
+
+  const snake = isSnakeDraft(detail);
 
   for (let round = 1; round <= numRounds; round++) {
-    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
+    html += `<tr class="round-header"><td colspan="4">Round ${round}</td></tr>`;
 
-    const roundOrder = hasExactDraftOrder && round % 2 === 0
+    const roundOrder = hasExactDraftOrder && snake && round % 2 === 0
       ? [...snakeOrder].reverse()
       : snakeOrder;
 
@@ -863,6 +981,10 @@ function renderDraftBoard() {
       const slot = hasExactDraftOrder
         ? `${round}.${String(idx + 1).padStart(2, '0')}`
         : '';
+
+      const overall = hasExactDraftOrder
+        ? (round - 1) * roundOrder.length + idx + 1
+        : null;
 
       const key = String(origRosterId) + '_' + String(round);
       const currentOwner = finalOwnerMap[key] || String(origRosterId);
@@ -874,6 +996,7 @@ function renderDraftBoard() {
       html += `
         <tr>
           <td class="pick-num">${slot}</td>
+          <td class="overall-num">${overall ? '#' + overall : ''}</td>
           <td class="team-cell team-link" onclick="selectTeam('${currentOwner}')">${curName}</td>
           <td class="origin-cell ${isSame ? 'same' : ''}">${isSame ? '—' : origName}</td>
         </tr>
@@ -890,6 +1013,51 @@ function renderDraftBoard() {
 function selectDraftYear(year) {
   state.selectedDraftYear = year;
   renderDraftBoard();
+}
+
+function renderStandings() {
+  const teams = state.rosters.map(r => ({
+    rosterId: String(r.roster_id),
+    name: state.ownerMap[String(r.roster_id)] || 'Roster ' + r.roster_id,
+    rec: getTeamRecord(r)
+  }));
+
+  const seasonStarted = teams.some(t =>
+    t.rec.wins || t.rec.losses || t.rec.ties || t.rec.pf
+  );
+
+  teams.sort((a,b) => {
+    if (b.rec.wins !== a.rec.wins) return b.rec.wins - a.rec.wins;
+    if (b.rec.pf !== a.rec.pf) return b.rec.pf - a.rec.pf;
+    return Number(a.rosterId) - Number(b.rosterId);
+  });
+
+  const season = state.league && state.league.season ? state.league.season + ' ' : '';
+
+  let html = `<div class="section-label">${season}Standings</div>`;
+
+  if (!seasonStarted) {
+    html += `<div class="info-banner">Season hasn't started yet — records and points will fill in once games are played</div>`;
+  }
+
+  html += `<div class="draft-board"><table class="board-table">`;
+  html += `<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>Points For</th><th>Points Against</th></tr></thead><tbody>`;
+
+  teams.forEach((t, index) => {
+    html += `
+      <tr>
+        <td class="pick-num">${index + 1}</td>
+        <td class="team-cell team-link" onclick="selectTeam('${t.rosterId}')">${t.name}</td>
+        <td>${formatRecord(t.rec)}</td>
+        <td>${t.rec.pf.toFixed(1)}</td>
+        <td>${t.rec.pa.toFixed(1)}</td>
+      </tr>
+    `;
+  });
+
+  html += `</tbody></table></div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
 }
 
 async function loadNotes() {
