@@ -31,6 +31,8 @@ body {
   line-height:1.5;
 }
 
+body.modal-open { overflow:hidden; }
+
 .header {
   background:linear-gradient(135deg,#0a0d12 0%,#111a2e 100%);
   border-bottom:1px solid var(--border);
@@ -46,6 +48,7 @@ body {
   align-items:baseline;
   gap:12px;
   margin-bottom:8px;
+  flex-wrap:wrap;
 }
 
 .header h1 {
@@ -207,9 +210,22 @@ body {
   width:60px;
 }
 
+.selection-cell {
+  font-weight:600;
+  white-space:nowrap;
+}
+
+.selection-pos {
+  font-family:'DM Mono', monospace;
+  font-size:.7rem;
+  color:var(--muted);
+  margin-left:6px;
+}
+
 .injury-tag {
   font-family:'DM Mono', monospace;
   font-size:.62rem;
+  font-weight:400;
   color:var(--danger);
   border:1px solid rgba(232,74,106,.4);
   border-radius:4px;
@@ -249,6 +265,30 @@ body {
 
 .team-link:hover { color:var(--accent); }
 
+.team-with-avatar {
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.avatar {
+  border-radius:50%;
+  object-fit:cover;
+  flex:none;
+  vertical-align:middle;
+}
+
+.avatar-fallback {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-family:'DM Mono', monospace;
+  font-size:.68rem;
+}
+
 .origin-cell {
   font-family:'DM Mono', monospace;
   font-size:.72rem;
@@ -267,7 +307,7 @@ body {
   border-bottom:2px solid var(--border);
 }
 
-.team-panel, .notes-panel {
+.team-panel, .notes-panel, .settings-panel {
   margin-top:22px;
   background:var(--card);
   border:1px solid var(--border);
@@ -283,14 +323,14 @@ body {
   margin-bottom:14px;
 }
 
-.team-panel h2, .notes-top h2 {
+.team-panel h2, .notes-top h2, .settings-panel h2 {
   font-family:'Bebas Neue', sans-serif;
   font-size:1.8rem;
   letter-spacing:2px;
   color:var(--accent);
 }
 
-.close-btn, .edit-btn, .save-btn, .cancel-btn, .delete-btn {
+.close-btn, .edit-btn, .save-btn, .cancel-btn, .delete-btn, .back-btn {
   background:none;
   border:1px solid var(--border);
   color:var(--muted);
@@ -308,6 +348,32 @@ body {
 .delete-btn {
   border-color:var(--danger);
   color:var(--danger);
+}
+
+.back-btn {
+  border-color:var(--accent);
+  color:var(--accent);
+  padding:8px 20px;
+  margin-bottom:14px;
+}
+
+.modal-overlay {
+  position:fixed;
+  inset:0;
+  background:rgba(5,8,14,.8);
+  z-index:300;
+  overflow-y:auto;
+  padding:16px 12px 48px;
+}
+
+.modal-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  max-width:960px;
+  margin:0 auto;
+  padding:18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
 }
 
 .detail-grid {
@@ -340,11 +406,13 @@ body {
   margin-top:0;
 }
 
-.roster-list, .owned-picks-list, .notes-list {
+.roster-list, .owned-picks-list, .notes-list, .list-stack {
   display:flex;
   flex-direction:column;
   gap:8px;
 }
+
+.list-stack { gap:12px; }
 
 .roster-row, .owned-pick-row {
   display:flex;
@@ -364,6 +432,92 @@ body {
   font-family:'DM Mono', monospace;
   font-size:.72rem;
   color:var(--muted);
+}
+
+.matchup-grid {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+
+@media (min-width:800px) {
+  .matchup-grid { grid-template-columns:1fr 1fr; }
+}
+
+.matchup-card, .tx-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+}
+
+.matchup-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:7px 0;
+}
+
+.matchup-points {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:1.3rem;
+  color:var(--muted);
+}
+
+.matchup-row.winner .matchup-points { color:var(--green); }
+.matchup-row.winner .team-link { color:var(--green); }
+
+.tx-top {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+}
+
+.tx-badge {
+  font-family:'DM Mono', monospace;
+  font-size:.62rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  border-radius:4px;
+  padding:2px 8px;
+  border:1px solid var(--border);
+  color:var(--muted);
+}
+
+.tx-badge.trade { color:var(--accent); border-color:rgba(232,200,74,.5); }
+.tx-badge.waiver { color:var(--accent2); border-color:rgba(74,157,232,.5); }
+.tx-badge.free_agent { color:var(--green); border-color:rgba(74,232,160,.45); }
+.tx-badge.commissioner { color:var(--danger); border-color:rgba(232,74,106,.45); }
+
+.tx-date {
+  font-family:'DM Mono', monospace;
+  font-size:.7rem;
+  color:var(--muted);
+}
+
+.tx-line { font-size:.88rem; padding:2px 0; }
+.tx-add { color:var(--green); }
+.tx-drop { color:var(--danger); }
+.tx-pick { color:var(--accent2); }
+
+.trend-grid {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+}
+
+@media (min-width:800px) {
+  .trend-grid { grid-template-columns:1fr 1fr; }
+}
+
+.trend-count {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--accent2);
+  white-space:nowrap;
 }
 
 .note-card {
@@ -411,7 +565,7 @@ body {
 
 .note-form.active { display:block; }
 
-.note-input, .note-textarea {
+.note-input, .note-textarea, .settings-input {
   width:100%;
   background:var(--surface);
   border:1px solid var(--border);
@@ -422,6 +576,8 @@ body {
   margin-bottom:10px;
 }
 
+.settings-input { font-family:'DM Mono', monospace; }
+
 .note-textarea {
   min-height:90px;
   resize:vertical;
@@ -431,6 +587,20 @@ body {
   display:flex;
   gap:8px;
   flex-wrap:wrap;
+}
+
+.hint {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+  margin-bottom:14px;
+}
+
+.settings-error {
+  font-family:'DM Mono', monospace;
+  font-size:.75rem;
+  color:var(--danger);
+  margin-bottom:10px;
 }
 
 .empty, .error-msg {
@@ -461,7 +631,11 @@ body {
   <div class="tabs">
     <button class="tab active" data-tab="board" onclick="showTab('board')">Draft Board</button>
     <button class="tab" data-tab="standings" onclick="showTab('standings')">Standings</button>
+    <button class="tab" data-tab="matchups" onclick="showTab('matchups')">Matchups</button>
+    <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
+    <button class="tab" data-tab="trending" onclick="showTab('trending')">Trending</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
+    <button class="tab" data-tab="settings" onclick="showTab('settings')">Settings</button>
   </div>
 </div>
 
@@ -471,6 +645,8 @@ body {
     <p>Fetching league data...</p>
   </div>
 </div>
+
+<div id="modalRoot"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
@@ -488,9 +664,12 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-const LEAGUE_ID = '1330745662001659904';
+const API = 'https://api.sleeper.app/v1';
+const DEFAULT_LEAGUE_ID = '1330745662001659904';
+const LEAGUE_ID_STORAGE_KEY = 'ff.leagueId';
 const NOTE_PASSCODE = '2325';
 const NOTES_COLLECTION = 'leagueNotes';
+const MAX_WEEKS = 18;
 
 const REAL_NAME_BY_SLEEPER_TEAM = {
   'nacua matada': 'Jaren',
@@ -503,23 +682,49 @@ const REAL_NAME_BY_SLEEPER_TEAM = {
   'njigbas in paris': 'Dylan'
 };
 
-let state = {
-  league:null,
-  users:[],
-  rosters:[],
-  tradedPicks:[],
-  drafts:[],
-  players:{},
-  ownerMap:{},
-  draftDetails:{},
-  availableYears:[],
-  selectedDraftYear:null,
-  selectedTeamRosterId:null,
-  activeTab:'board',
-  notesUnlocked:false,
-  editingNoteId:null,
-  notes:[]
-};
+function getStoredLeagueId() {
+  try {
+    return localStorage.getItem(LEAGUE_ID_STORAGE_KEY) || DEFAULT_LEAGUE_ID;
+  } catch(e) {
+    return DEFAULT_LEAGUE_ID;
+  }
+}
+
+let state = {};
+
+function freshState() {
+  return {
+    leagueId: getStoredLeagueId(),
+    league:null,
+    users:[],
+    rosters:[],
+    tradedPicks:[],
+    drafts:[],
+    players:{},
+    ownerMap:{},
+    userByRosterId:{},
+    draftDetails:{},
+    draftPicksBySeason:{},
+    nflState:null,
+    availableYears:[],
+    selectedDraftYear:null,
+    selectedWeek:null,
+    matchupsByWeek:{},
+    transactions:null,
+    transactionsLoading:false,
+    brackets:null,
+    bracketsLoading:false,
+    trending:null,
+    trendingLoading:false,
+    activeTab:'board',
+    notesUnlocked:false,
+    editingNoteId:null,
+    notes:[],
+    settingsError:''
+  };
+}
+
+state = freshState();
 
 function normalizeName(name) {
   return String(name || '').trim().toLowerCase();
@@ -541,72 +746,112 @@ function getSleeperTeamName(user, rosterId) {
   return 'Team ' + rosterId;
 }
 
+function showLoading(message) {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="status">
+      <div class="spinner"></div>
+      <p>${message || 'Fetching league data...'}</p>
+    </div>
+  `;
+}
+
 async function init() {
+  // Capture the state object for this load: if the user switches leagues while
+  // we're fetching, `state` is replaced and this stale run must not touch it.
+  const s = state;
+
+  showLoading();
+  closeTeamCard();
+
   try {
-    const [league, users, rosters, tradedPicks, drafts, players] = await Promise.all([
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID),
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/users'),
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/rosters'),
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/traded_picks'),
-      fetchJSON('https://api.sleeper.app/v1/league/' + LEAGUE_ID + '/drafts'),
-      fetchJSON('https://api.sleeper.app/v1/players/nfl')
+    // Core league data — the site can't work without these three.
+    const [league, users, rosters] = await Promise.all([
+      fetchJSON(API + '/league/' + s.leagueId),
+      fetchJSON(API + '/league/' + s.leagueId + '/users'),
+      fetchJSON(API + '/league/' + s.leagueId + '/rosters')
     ]);
 
-    state.league = league;
-    state.users = users || [];
-    state.rosters = rosters || [];
-    state.tradedPicks = tradedPicks || [];
-    state.drafts = drafts || [];
-    state.players = players || {};
+    s.league = league;
+    s.users = users || [];
+    s.rosters = rosters || [];
+
+    // Everything else is best-effort: one failing endpoint shouldn't take the site down.
+    const results = await Promise.allSettled([
+      fetchJSON(API + '/league/' + s.leagueId + '/traded_picks'),
+      fetchJSON(API + '/league/' + s.leagueId + '/drafts'),
+      fetchJSON(API + '/players/nfl'),
+      fetchJSON(API + '/state/nfl'),
+      loadNotes()
+    ]);
+
+    s.tradedPicks = results[0].status === 'fulfilled' ? (results[0].value || []) : [];
+    s.drafts = results[1].status === 'fulfilled' ? (results[1].value || []) : [];
+    s.players = results[2].status === 'fulfilled' ? (results[2].value || {}) : {};
+    s.nflState = results[3].status === 'fulfilled' ? results[3].value : null;
 
     const userById = {};
-    state.users.forEach(u => userById[u.user_id] = u);
+    s.users.forEach(u => userById[u.user_id] = u);
 
-    state.rosters.forEach(r => {
+    s.rosters.forEach(r => {
       const u = userById[r.owner_id];
       const sleeperTeamName = getSleeperTeamName(u, r.roster_id);
       const realName = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
-      state.ownerMap[String(r.roster_id)] = realName;
+      s.ownerMap[String(r.roster_id)] = realName;
+      s.userByRosterId[String(r.roster_id)] = u || null;
     });
 
     await Promise.all(
-      state.drafts.filter(d => d.draft_id).map(async d => {
+      s.drafts.filter(d => d.draft_id).map(async d => {
         try {
-          const detail = await fetchJSON('https://api.sleeper.app/v1/draft/' + d.draft_id);
-          state.draftDetails[String(d.season)] = detail;
+          const detail = await fetchJSON(API + '/draft/' + d.draft_id);
+          s.draftDetails[String(d.season)] = detail;
+        } catch(e) {}
+
+        try {
+          const picks = await fetchJSON(API + '/draft/' + d.draft_id + '/picks');
+          if (picks && picks.length) {
+            const byOverall = {};
+            picks.forEach(p => { if (p.pick_no) byOverall[p.pick_no] = p; });
+            s.draftPicksBySeason[String(d.season)] = byOverall;
+          }
         } catch(e) {}
       })
     );
 
     const yearSet = new Set();
 
-    state.drafts.forEach(d => {
+    s.drafts.forEach(d => {
       if (d.season) yearSet.add(String(d.season));
     });
 
-    state.tradedPicks.forEach(p => {
+    s.tradedPicks.forEach(p => {
       if (p.season) yearSet.add(String(p.season));
     });
 
-    state.availableYears = Array.from(yearSet).sort((a,b) => Number(b) - Number(a));
+    s.availableYears = Array.from(yearSet).sort((a,b) => Number(b) - Number(a));
 
     const thisYear = currentSeasonYear();
 
-    state.selectedDraftYear = state.availableYears.includes(thisYear)
+    s.selectedDraftYear = s.availableYears.includes(thisYear)
       ? thisYear
-      : state.availableYears[0] || thisYear;
+      : s.availableYears[0] || thisYear;
 
-    await loadNotes();
+    if (s !== state) return;
 
     const headerBits = [league.name || 'Dynasty League'];
     if (league.season) headerBits.push(league.season);
     if (league.total_rosters) headerBits.push(league.total_rosters + ' Teams');
     document.getElementById('leagueName').textContent = headerBits.join(' · ');
+
     renderTab();
 
   } catch(e) {
+    if (s !== state) return;
+
     document.getElementById('mainContent').innerHTML =
-      '<div class="error-msg">Failed to load: ' + e.message + '</div>';
+      '<div class="error-msg">Failed to load league ' + s.leagueId + ': ' + e.message +
+      '<br><br><button class="edit-btn" onclick="showTab(\'settings\')">Open Settings</button></div>';
+    document.getElementById('leagueName').textContent = 'League not loaded';
   }
 }
 
@@ -621,11 +866,78 @@ function showTab(tab) {
 function renderTab() {
   if (state.activeTab === 'notes') renderLeagueNotes();
   else if (state.activeTab === 'standings') renderStandings();
+  else if (state.activeTab === 'matchups') renderMatchups();
+  else if (state.activeTab === 'activity') renderActivity();
+  else if (state.activeTab === 'trending') renderTrending();
+  else if (state.activeTab === 'settings') renderSettings();
   else renderDraftBoard();
 }
 
-function isSnakeDraft(detail) {
-  return !detail || !detail.type || detail.type !== 'linear';
+/* ---------- shared team helpers ---------- */
+
+function teamName(rosterId) {
+  return state.ownerMap[String(rosterId)] || 'Roster ' + rosterId;
+}
+
+function avatarHtml(rosterId, size) {
+  size = size || 22;
+  const u = state.userByRosterId[String(rosterId)];
+  const initial = teamName(rosterId).charAt(0).toUpperCase();
+
+  if (u && u.avatar) {
+    return `<img class="avatar" style="width:${size}px;height:${size}px"
+      src="https://sleepercdn.com/avatars/thumbs/${u.avatar}" alt=""
+      onerror="this.style.display='none'">`;
+  }
+
+  return `<span class="avatar avatar-fallback" style="width:${size}px;height:${size}px">${initial}</span>`;
+}
+
+function teamLink(rosterId, withAvatar) {
+  const name = `<span class="team-link" onclick="openTeamCard('${String(rosterId)}')">${teamName(rosterId)}</span>`;
+  if (!withAvatar) return name;
+  return `<span class="team-with-avatar">${avatarHtml(rosterId)}${name}</span>`;
+}
+
+function getTeamRecord(roster) {
+  const s = (roster && roster.settings) || {};
+  return {
+    wins: s.wins || 0,
+    losses: s.losses || 0,
+    ties: s.ties || 0,
+    pf: (s.fpts || 0) + (s.fpts_decimal || 0) / 100,
+    pa: (s.fpts_against || 0) + (s.fpts_against_decimal || 0) / 100
+  };
+}
+
+function formatRecord(rec) {
+  return rec.wins + '-' + rec.losses + (rec.ties ? '-' + rec.ties : '');
+}
+
+function leagueDraftRounds() {
+  if (state.league && state.league.settings && state.league.settings.draft_rounds) {
+    return parseInt(state.league.settings.draft_rounds, 10);
+  }
+  return 5;
+}
+
+/* ---------- draft board ---------- */
+
+function isRoundReversed(round, detail) {
+  const type = detail && detail.type ? detail.type : 'snake';
+  if (type !== 'snake') return false;
+
+  const reversalRound = detail && detail.settings && detail.settings.reversal_round
+    ? parseInt(detail.settings.reversal_round, 10)
+    : 0;
+
+  let reversed = false;
+  for (let r = 2; r <= Number(round); r++) {
+    // At the reversal round (e.g. 3rd-round reversal) the direction repeats once,
+    // then keeps alternating as usual.
+    if (!(reversalRound > 0 && r === reversalRound)) reversed = !reversed;
+  }
+  return reversed;
 }
 
 function getPickPosition(year, originalRosterId, round) {
@@ -636,7 +948,7 @@ function getPickPosition(year, originalRosterId, round) {
   const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
   let order = slots.map(s => String(slotMap[String(s)]));
 
-  if (isSnakeDraft(detail) && Number(round) % 2 === 0) order = [...order].reverse();
+  if (isRoundReversed(round, detail)) order = [...order].reverse();
 
   const index = order.findIndex(rid => String(rid) === String(originalRosterId));
   if (index === -1) return null;
@@ -645,11 +957,6 @@ function getPickPosition(year, originalRosterId, round) {
     slot: `${round}.${String(index + 1).padStart(2, '0')}`,
     overall: (Number(round) - 1) * order.length + index + 1
   };
-}
-
-function getExactPickSlot(year, originalRosterId, round) {
-  const pos = getPickPosition(year, originalRosterId, round);
-  return pos ? pos.slot : '';
 }
 
 function buildFinalOwnerMap(yearPicks) {
@@ -697,7 +1004,7 @@ function getAllOwnedPicks(rosterId) {
     const detail = state.draftDetails[String(year)];
 
     let originalRosterIds = Object.keys(state.ownerMap).sort((a,b) => Number(a) - Number(b));
-    let numRounds = 5;
+    let numRounds = leagueDraftRounds();
 
     if (detail && detail.slot_to_roster_id) {
       originalRosterIds = Object.values(detail.slot_to_roster_id).map(String);
@@ -715,7 +1022,6 @@ function getAllOwnedPicks(rosterId) {
 
         if (String(currentOwner) === String(rosterId)) {
           const pos = getPickPosition(year, originalRosterId, round);
-          const origName = state.ownerMap[String(originalRosterId)] || 'Roster ' + originalRosterId;
 
           owned.push({
             year,
@@ -723,7 +1029,7 @@ function getAllOwnedPicks(rosterId) {
             exactSlot: pos ? pos.slot : '',
             overall: pos ? pos.overall : null,
             originalRosterId,
-            origName
+            origName: teamName(originalRosterId)
           });
         }
       });
@@ -737,28 +1043,158 @@ function getAllOwnedPicks(rosterId) {
   });
 }
 
-function selectTeam(rosterId) {
-  state.selectedTeamRosterId = String(rosterId);
+function renderDraftBoard() {
+  const year = state.selectedDraftYear;
+  const draftForYear = state.drafts.find(d => String(d.season) === String(year));
+  const detail = state.draftDetails[String(year)];
+  const draftedByOverall = state.draftPicksBySeason[String(year)] || null;
 
-  if (state.activeTab !== 'board') showTab('board');
-  else renderDraftBoard();
+  let snakeOrder = [];
+  let hasExactDraftOrder = false;
+  let numRounds = leagueDraftRounds();
 
-  setTimeout(() => {
-    const panel = document.getElementById('teamPanel');
-    if (panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
-  }, 50);
+  if (detail && detail.slot_to_roster_id) {
+    const slotMap = detail.slot_to_roster_id;
+    const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
+
+    snakeOrder = slots.map(s => String(slotMap[String(s)]));
+    hasExactDraftOrder = true;
+
+    if (detail.settings && detail.settings.rounds) {
+      numRounds = parseInt(detail.settings.rounds, 10);
+    }
+  } else {
+    snakeOrder = Object.keys(state.ownerMap)
+      .map(Number)
+      .sort((a,b) => a - b)
+      .map(String);
+
+    if (draftForYear && draftForYear.settings && draftForYear.settings.rounds) {
+      numRounds = parseInt(draftForYear.settings.rounds, 10);
+    }
+  }
+
+  const yearPicks = state.tradedPicks.filter(p => String(p.season) === String(year));
+  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
+  const showSelections = !!draftedByOverall;
+
+  let html = `
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Draft Board</span>
+
+      <select class="year-select" onchange="selectDraftYear(this.value)">
+        ${state.availableYears.map(y => `
+          <option value="${y}" ${String(y) === String(year) ? 'selected' : ''}>${y}</option>
+        `).join('')}
+      </select>
+    </div>
+  `;
+
+  if (hasExactDraftOrder) {
+    let banner = `Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams`;
+
+    if (detail.status === 'complete') {
+      banner += ' · Draft complete';
+    } else if (detail.status === 'drafting') {
+      banner += ' · Draft in progress';
+    } else if (detail.status === 'pre_draft' && detail.start_time) {
+      banner += ' · Draft: ' + new Date(detail.start_time).toLocaleString(undefined, {
+        month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'
+      });
+    }
+
+    html += `<div class="info-banner">${banner}</div>`;
+  } else {
+    html += `<div class="info-banner">Draft order not set yet for ${year} — showing pick ownership by round</div>`;
+  }
+
+  html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
+  html += `<div class="draft-board"><table class="board-table">`;
+
+  let headers = '';
+  let colCount = 2;
+
+  if (hasExactDraftOrder) {
+    headers += `<th>Pick</th><th>Overall</th>`;
+    colCount += 2;
+  }
+
+  headers += `<th>Pick Goes To</th>`;
+
+  if (showSelections) {
+    headers += `<th>Selection</th>`;
+    colCount += 1;
+  }
+
+  headers += `<th>Original Slot</th>`;
+
+  html += `<thead><tr>${headers}</tr></thead><tbody>`;
+
+  for (let round = 1; round <= numRounds; round++) {
+    html += `<tr class="round-header"><td colspan="${colCount}">Round ${round}</td></tr>`;
+
+    const roundOrder = hasExactDraftOrder && isRoundReversed(round, detail)
+      ? [...snakeOrder].reverse()
+      : snakeOrder;
+
+    roundOrder.forEach((origRosterId, idx) => {
+      const key = String(origRosterId) + '_' + String(round);
+      const currentOwner = finalOwnerMap[key] || String(origRosterId);
+      const isSame = String(currentOwner) === String(origRosterId);
+
+      html += '<tr>';
+
+      if (hasExactDraftOrder) {
+        const slot = `${round}.${String(idx + 1).padStart(2, '0')}`;
+        const overall = (round - 1) * roundOrder.length + idx + 1;
+        html += `<td class="pick-num">${slot}</td><td class="overall-num">#${overall}</td>`;
+      }
+
+      html += `<td class="team-cell">${teamLink(currentOwner)}</td>`;
+
+      if (showSelections) {
+        const overall = (round - 1) * roundOrder.length + idx + 1;
+        const pick = draftedByOverall[overall];
+
+        if (pick) {
+          const md = pick.metadata || {};
+          const pname = (md.first_name && md.last_name)
+            ? md.first_name + ' ' + md.last_name
+            : playerDisplayName(pick.player_id);
+          const ppos = md.position || playerPositionOf(pick.player_id);
+          html += `<td class="selection-cell">${pname}<span class="selection-pos">${ppos || ''}</span></td>`;
+        } else {
+          html += `<td class="selection-cell"><span class="selection-pos">—</span></td>`;
+        }
+      }
+
+      html += `<td class="origin-cell ${isSame ? 'same' : ''}">${isSame ? '—' : teamName(origRosterId)}</td>`;
+      html += '</tr>';
+    });
+  }
+
+  html += `</tbody></table></div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
 }
 
-function clearSelectedTeam() {
-  state.selectedTeamRosterId = null;
+function selectDraftYear(year) {
+  state.selectedDraftYear = year;
   renderDraftBoard();
 }
+
+/* ---------- players ---------- */
 
 function playerDisplayName(playerId) {
   const p = state.players[String(playerId)];
   if (!p) return 'Player ' + playerId;
 
   return p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Player ' + playerId;
+}
+
+function playerPositionOf(playerId) {
+  const p = state.players[String(playerId)];
+  return (p && p.position) || '';
 }
 
 function playerMeta(playerId) {
@@ -797,21 +1233,6 @@ function playerSection(title, list) {
   `;
 }
 
-function getTeamRecord(roster) {
-  const s = (roster && roster.settings) || {};
-  return {
-    wins: s.wins || 0,
-    losses: s.losses || 0,
-    ties: s.ties || 0,
-    pf: (s.fpts || 0) + (s.fpts_decimal || 0) / 100,
-    pa: (s.fpts_against || 0) + (s.fpts_against_decimal || 0) / 100
-  };
-}
-
-function formatRecord(rec) {
-  return rec.wins + '-' + rec.losses + (rec.ties ? '-' + rec.ties : '');
-}
-
 function rosterPositionMix(playerIds) {
   const counts = {};
 
@@ -831,36 +1252,29 @@ function rosterPositionMix(playerIds) {
   return known.concat(other).join(' · ');
 }
 
-function renderTeamPanel() {
-  const rosterId = state.selectedTeamRosterId;
-  if (!rosterId) return '';
+/* ---------- team card (modal) ---------- */
 
-  const teamName = state.ownerMap[String(rosterId)] || 'Roster ' + rosterId;
+function teamCardContent(rosterId) {
   const roster = state.rosters.find(r => String(r.roster_id) === String(rosterId));
   const ownedPicks = getAllOwnedPicks(rosterId);
 
   if (!roster) {
-    return `
-      <div class="team-panel" id="teamPanel">
-        <div class="team-panel-top">
-          <h2>${teamName}</h2>
-          <button class="close-btn" onclick="clearSelectedTeam()">Close</button>
-        </div>
-        <div class="empty">No roster found</div>
-      </div>
-    `;
+    return `<div class="empty">No roster found</div>`;
   }
 
   const starters = roster.starters || [];
   const allPlayers = roster.players || [];
   const injured = roster.reserve || [];
+  const taxi = roster.taxi || [];
 
   const starterSet = new Set(starters.map(String));
   const injuredSet = new Set(injured.map(String));
+  const taxiSet = new Set(taxi.map(String));
 
   const bench = allPlayers.filter(pid =>
     !starterSet.has(String(pid)) &&
-    !injuredSet.has(String(pid))
+    !injuredSet.has(String(pid)) &&
+    !taxiSet.has(String(pid))
   );
 
   const picksHtml = ownedPicks.length
@@ -877,148 +1291,72 @@ function renderTeamPanel() {
   const rec = getTeamRecord(roster);
   const hasPlayed = (rec.wins + rec.losses + rec.ties) > 0 || rec.pf > 0;
   const mix = rosterPositionMix(allPlayers);
+  const totalMoves = roster.settings && roster.settings.total_moves ? roster.settings.total_moves : 0;
+  const waiverPos = roster.settings && roster.settings.waiver_position ? roster.settings.waiver_position : null;
+
+  const subBits = [];
+  if (hasPlayed) subBits.push(formatRecord(rec) + ' · ' + rec.pf.toFixed(1) + ' PF · ' + rec.pa.toFixed(1) + ' PA');
+  if (waiverPos) subBits.push('Waiver #' + waiverPos);
+  if (totalMoves) subBits.push(totalMoves + ' moves');
 
   return `
-    <div class="team-panel" id="teamPanel">
-      <div class="team-panel-top">
+    <div class="team-panel-top">
+      <div class="team-with-avatar">
+        ${avatarHtml(rosterId, 40)}
         <div>
-          <h2>${teamName}</h2>
-          ${hasPlayed ? `<div class="record-line">${formatRecord(rec)} · ${rec.pf.toFixed(1)} PF · ${rec.pa.toFixed(1)} PA</div>` : ''}
+          <h2>${teamName(rosterId)}</h2>
+          ${subBits.length ? `<div class="record-line">${subBits.join(' · ')}</div>` : ''}
         </div>
-        <button class="close-btn" onclick="clearSelectedTeam()">Close</button>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div class="detail-box">
+        ${mix ? `<div class="roster-mix">${mix}</div>` : ''}
+        ${playerSection('Starters', starters)}
+        ${playerSection('Bench', bench)}
+        ${taxi.length ? playerSection('Taxi Squad', taxi) : ''}
+        ${playerSection('Injured / Reserve', injured)}
       </div>
 
-      <div class="detail-grid">
-        <div class="detail-box">
-          ${mix ? `<div class="roster-mix">${mix}</div>` : ''}
-          ${playerSection('Starters', starters)}
-          ${playerSection('Bench', bench)}
-          ${playerSection('Injured / Reserve', injured)}
-        </div>
-
-        <div class="detail-box">
-          <div class="detail-title">Draft Picks</div>
-          <div class="owned-picks-list">${picksHtml}</div>
-        </div>
+      <div class="detail-box">
+        <div class="detail-title">Draft Picks</div>
+        <div class="owned-picks-list">${picksHtml}</div>
       </div>
     </div>
   `;
 }
 
-function renderDraftBoard() {
-  const year = state.selectedDraftYear;
-  const draftForYear = state.drafts.find(d => String(d.season) === String(year));
-  const detail = state.draftDetails[String(year)];
+function openTeamCard(rosterId) {
+  const root = document.getElementById('modalRoot');
 
-  let snakeOrder = [];
-  let hasExactDraftOrder = false;
-  let numRounds = 5;
-
-  if (detail && detail.slot_to_roster_id) {
-    const slotMap = detail.slot_to_roster_id;
-    const slots = Object.keys(slotMap).map(Number).sort((a,b) => a - b);
-
-    snakeOrder = slots.map(s => String(slotMap[String(s)]));
-    hasExactDraftOrder = true;
-
-    if (detail.settings && detail.settings.rounds) {
-      numRounds = parseInt(detail.settings.rounds, 10);
-    }
-  } else {
-    snakeOrder = Object.keys(state.ownerMap)
-      .map(Number)
-      .sort((a,b) => a - b)
-      .map(String);
-
-    if (draftForYear && draftForYear.settings && draftForYear.settings.rounds) {
-      numRounds = parseInt(draftForYear.settings.rounds, 10);
-    }
-  }
-
-  const yearPicks = state.tradedPicks.filter(p => String(p.season) === String(year));
-  const finalOwnerMap = buildFinalOwnerMap(yearPicks);
-
-  let html = `
-    <div class="year-selector">
-      <span class="section-label" style="margin:0;">Draft Board</span>
-
-      <select class="year-select" onchange="selectDraftYear(this.value)">
-        ${state.availableYears.map(y => `
-          <option value="${y}" ${String(y) === String(year) ? 'selected' : ''}>${y}</option>
-        `).join('')}
-      </select>
+  root.innerHTML = `
+    <div class="modal-overlay" id="teamModalOverlay" onclick="if (event.target === this) closeTeamCard()">
+      <div class="modal-card">
+        <button class="back-btn" onclick="closeTeamCard()">&larr; Back</button>
+        ${teamCardContent(rosterId)}
+      </div>
     </div>
   `;
 
-  if (hasExactDraftOrder) {
-    let banner = `Real draft order from Sleeper · ${year} · ${numRounds} rounds · ${snakeOrder.length} teams`;
-
-    if (detail && detail.status === 'pre_draft' && detail.start_time) {
-      banner += ' · Draft: ' + new Date(detail.start_time).toLocaleString(undefined, {
-        month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'
-      });
-    }
-
-    html += `<div class="info-banner">${banner}</div>`;
-  } else {
-    html += `<div class="info-banner">Draft order not available yet — pick numbers left blank</div>`;
-  }
-
-  html += `<div class="section-label">${year} Draft — ${numRounds} Rounds</div>`;
-  html += `<div class="draft-board"><table class="board-table">`;
-  html += `<thead><tr><th>Pick</th><th>Overall</th><th>Pick Goes To</th><th>Original Slot</th></tr></thead><tbody>`;
-
-  const snake = isSnakeDraft(detail);
-
-  for (let round = 1; round <= numRounds; round++) {
-    html += `<tr class="round-header"><td colspan="4">Round ${round}</td></tr>`;
-
-    const roundOrder = hasExactDraftOrder && snake && round % 2 === 0
-      ? [...snakeOrder].reverse()
-      : snakeOrder;
-
-    roundOrder.forEach((origRosterId, idx) => {
-      const slot = hasExactDraftOrder
-        ? `${round}.${String(idx + 1).padStart(2, '0')}`
-        : '';
-
-      const overall = hasExactDraftOrder
-        ? (round - 1) * roundOrder.length + idx + 1
-        : null;
-
-      const key = String(origRosterId) + '_' + String(round);
-      const currentOwner = finalOwnerMap[key] || String(origRosterId);
-
-      const origName = state.ownerMap[String(origRosterId)] || 'Roster ' + origRosterId;
-      const curName = state.ownerMap[String(currentOwner)] || 'Roster ' + currentOwner;
-      const isSame = String(currentOwner) === String(origRosterId);
-
-      html += `
-        <tr>
-          <td class="pick-num">${slot}</td>
-          <td class="overall-num">${overall ? '#' + overall : ''}</td>
-          <td class="team-cell team-link" onclick="selectTeam('${currentOwner}')">${curName}</td>
-          <td class="origin-cell ${isSame ? 'same' : ''}">${isSame ? '—' : origName}</td>
-        </tr>
-      `;
-    });
-  }
-
-  html += `</tbody></table></div>`;
-  html += renderTeamPanel();
-
-  document.getElementById('mainContent').innerHTML = html;
+  document.body.classList.add('modal-open');
 }
 
-function selectDraftYear(year) {
-  state.selectedDraftYear = year;
-  renderDraftBoard();
+function closeTeamCard() {
+  const root = document.getElementById('modalRoot');
+  if (root) root.innerHTML = '';
+  document.body.classList.remove('modal-open');
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeTeamCard();
+});
+
+/* ---------- standings + playoff brackets ---------- */
 
 function renderStandings() {
   const teams = state.rosters.map(r => ({
     rosterId: String(r.roster_id),
-    name: state.ownerMap[String(r.roster_id)] || 'Roster ' + r.roster_id,
     rec: getTeamRecord(r)
   }));
 
@@ -1026,7 +1364,13 @@ function renderStandings() {
     t.rec.wins || t.rec.losses || t.rec.ties || t.rec.pf
   );
 
+  const winPct = rec => {
+    const games = rec.wins + rec.losses + rec.ties;
+    return games ? (rec.wins + rec.ties * 0.5) / games : 0;
+  };
+
   teams.sort((a,b) => {
+    if (winPct(b.rec) !== winPct(a.rec)) return winPct(b.rec) - winPct(a.rec);
     if (b.rec.wins !== a.rec.wins) return b.rec.wins - a.rec.wins;
     if (b.rec.pf !== a.rec.pf) return b.rec.pf - a.rec.pf;
     return Number(a.rosterId) - Number(b.rosterId);
@@ -1047,7 +1391,7 @@ function renderStandings() {
     html += `
       <tr>
         <td class="pick-num">${index + 1}</td>
-        <td class="team-cell team-link" onclick="selectTeam('${t.rosterId}')">${t.name}</td>
+        <td class="team-cell">${teamLink(t.rosterId, true)}</td>
         <td>${formatRecord(t.rec)}</td>
         <td>${t.rec.pf.toFixed(1)}</td>
         <td>${t.rec.pa.toFixed(1)}</td>
@@ -1056,9 +1400,509 @@ function renderStandings() {
   });
 
   html += `</tbody></table></div>`;
+  html += `<div id="bracketSection"></div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
+
+  loadBrackets();
+}
+
+async function loadBrackets() {
+  const s = state;
+
+  if (!s.brackets && !s.bracketsLoading) {
+    s.bracketsLoading = true;
+
+    const [winners, losers] = await Promise.all([
+      fetchJSON(API + '/league/' + s.leagueId + '/winners_bracket').catch(() => []),
+      fetchJSON(API + '/league/' + s.leagueId + '/losers_bracket').catch(() => [])
+    ]);
+
+    s.brackets = { winners: winners || [], losers: losers || [] };
+    s.bracketsLoading = false;
+  }
+
+  if (s !== state || state.activeTab !== 'standings' || !state.brackets) return;
+
+  const target = document.getElementById('bracketSection');
+  if (!target) return;
+
+  target.innerHTML =
+    bracketHtml('Playoff Bracket', state.brackets.winners, true) +
+    bracketHtml('Consolation Bracket', state.brackets.losers, false);
+}
+
+function bracketTeamLabel(match, side) {
+  const direct = match[side];
+  if (direct) return teamLink(direct);
+
+  const from = match[side + '_from'];
+  if (from && from.w) return `<span class="player-pos">Winner of Match ${from.w}</span>`;
+  if (from && from.l) return `<span class="player-pos">Loser of Match ${from.l}</span>`;
+
+  return `<span class="player-pos">TBD</span>`;
+}
+
+function bracketHtml(title, matches, isWinners) {
+  if (!matches || !matches.length) return '';
+
+  const rounds = {};
+  matches.forEach(m => {
+    const r = m.r || 1;
+    if (!rounds[r]) rounds[r] = [];
+    rounds[r].push(m);
+  });
+
+  let html = `<div class="section-label">${title}</div><div class="list-stack">`;
+
+  Object.keys(rounds).map(Number).sort((a,b) => a - b).forEach(r => {
+    rounds[r].sort((a,b) => (a.m || 0) - (b.m || 0)).forEach(m => {
+      let label = `Round ${r} · Match ${m.m}`;
+      if (m.p === 1) label = isWinners ? 'Championship' : 'Toilet Bowl Final';
+      else if (m.p === 3) label = '3rd Place Game';
+      else if (m.p) label = `Place ${m.p} Game`;
+
+      const t1 = bracketTeamLabel(m, 't1');
+      const t2 = bracketTeamLabel(m, 't2');
+      const winner = m.w ? `<span class="tx-add">Winner: ${teamName(m.w)}</span>` : `<span class="player-pos">Winner: TBD</span>`;
+
+      html += `
+        <div class="tx-card">
+          <div class="tx-top">
+            <span class="tx-badge">${label}</span>
+          </div>
+          <div class="tx-line">${t1} <span class="player-pos">vs</span> ${t2}</div>
+          <div class="tx-line">${winner}</div>
+        </div>
+      `;
+    });
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+/* ---------- matchups ---------- */
+
+function currentNflWeek() {
+  const st = state.nflState;
+
+  if (st && state.league && String(st.season) === String(state.league.season)) {
+    const wk = parseInt(st.display_week || st.week, 10);
+    if (wk >= 1 && wk <= MAX_WEEKS) return wk;
+  }
+
+  return 1;
+}
+
+function renderMatchups() {
+  if (state.selectedWeek == null) state.selectedWeek = currentNflWeek();
+
+  const week = state.selectedWeek;
+
+  let html = `
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Matchups</span>
+
+      <select class="year-select" onchange="selectWeek(this.value)">
+        ${Array.from({length: MAX_WEEKS}, (_, i) => i + 1).map(w => `
+          <option value="${w}" ${w === week ? 'selected' : ''}>Week ${w}</option>
+        `).join('')}
+      </select>
+    </div>
+    <div id="matchupArea">
+      <div class="status"><div class="spinner"></div><p>Loading week ${week}...</p></div>
+    </div>
+  `;
+
+  document.getElementById('mainContent').innerHTML = html;
+
+  loadMatchups(week);
+}
+
+function selectWeek(week) {
+  state.selectedWeek = parseInt(week, 10);
+  renderMatchups();
+}
+
+async function loadMatchups(week) {
+  const s = state;
+
+  if (s.matchupsByWeek[week] === undefined) {
+    try {
+      s.matchupsByWeek[week] = await fetchJSON(API + '/league/' + s.leagueId + '/matchups/' + week) || [];
+    } catch(e) {
+      s.matchupsByWeek[week] = [];
+    }
+  }
+
+  // The user may have changed league, tab, or week while we were fetching.
+  if (s !== state || state.activeTab !== 'matchups' || state.selectedWeek !== week) return;
+
+  const target = document.getElementById('matchupArea');
+  if (!target) return;
+
+  const matchups = state.matchupsByWeek[week];
+
+  if (!matchups.length) {
+    target.innerHTML = `<div class="empty">No matchups for week ${week} yet — check back once the season starts</div>`;
+    return;
+  }
+
+  const byMatchup = {};
+  const byes = [];
+
+  matchups.forEach(m => {
+    if (m.matchup_id == null) {
+      byes.push(m);
+      return;
+    }
+    if (!byMatchup[m.matchup_id]) byMatchup[m.matchup_id] = [];
+    byMatchup[m.matchup_id].push(m);
+  });
+
+  let html = `<div class="matchup-grid">`;
+
+  Object.keys(byMatchup).map(Number).sort((a,b) => a - b).forEach(mid => {
+    const pair = byMatchup[mid];
+    const scored = pair.some(m => (m.points || 0) > 0);
+    const top = Math.max(...pair.map(m => m.points || 0));
+
+    html += `<div class="matchup-card">`;
+
+    pair.forEach(m => {
+      const isWinner = scored && (m.points || 0) === top && pair.filter(x => (x.points || 0) === top).length === 1;
+
+      html += `
+        <div class="matchup-row ${isWinner ? 'winner' : ''}">
+          <span class="team-with-avatar">${avatarHtml(m.roster_id)}${teamLink(m.roster_id)}</span>
+          <span class="matchup-points">${(m.points || 0).toFixed(2)}</span>
+        </div>
+      `;
+    });
+
+    html += `</div>`;
+  });
+
+  byes.forEach(m => {
+    html += `
+      <div class="matchup-card">
+        <div class="matchup-row">
+          <span class="team-with-avatar">${avatarHtml(m.roster_id)}${teamLink(m.roster_id)}</span>
+          <span class="player-pos">BYE</span>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  target.innerHTML = html;
+}
+
+/* ---------- activity (transactions) ---------- */
+
+function renderActivity() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">League Activity</div>
+    <div id="activityArea">
+      <div class="status"><div class="spinner"></div><p>Loading transactions...</p></div>
+    </div>
+  `;
+
+  loadActivity();
+}
+
+async function loadActivity() {
+  const s = state;
+
+  if (!s.transactions && !s.transactionsLoading) {
+    s.transactionsLoading = true;
+
+    const weeks = Array.from({length: MAX_WEEKS}, (_, i) => i + 1);
+    const results = await Promise.all(
+      weeks.map(w => fetchJSON(API + '/league/' + s.leagueId + '/transactions/' + w).catch(() => []))
+    );
+
+    const seen = new Set();
+    const all = [];
+
+    results.flat().forEach(t => {
+      if (!t || !t.transaction_id || seen.has(t.transaction_id)) return;
+      seen.add(t.transaction_id);
+      if (t.status === 'complete') all.push(t);
+    });
+
+    all.sort((a,b) => (b.status_updated || 0) - (a.status_updated || 0));
+    s.transactions = all;
+    s.transactionsLoading = false;
+  }
+
+  if (s !== state || state.activeTab !== 'activity' || !state.transactions) return;
+
+  const target = document.getElementById('activityArea');
+  if (!target) return;
+
+  const txs = state.transactions;
+
+  if (!txs.length) {
+    target.innerHTML = `<div class="empty">No completed transactions yet</div>`;
+    return;
+  }
+
+  const shown = txs.slice(0, 60);
+
+  let html = `<div class="list-stack">${shown.map(txCardHtml).join('')}</div>`;
+
+  if (txs.length > shown.length) {
+    html += `<div class="hint" style="margin-top:14px;">Showing the ${shown.length} most recent of ${txs.length} transactions</div>`;
+  }
+
+  target.innerHTML = html;
+}
+
+function txTypeLabel(type) {
+  if (type === 'free_agent') return 'Free Agent';
+  return String(type || 'move').replace(/_/g, ' ');
+}
+
+function txCardHtml(t) {
+  const date = t.status_updated
+    ? new Date(t.status_updated).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })
+    : '';
+
+  let lines = '';
+
+  if (t.type === 'trade') {
+    (t.roster_ids || []).forEach(rid => {
+      const gets = [];
+
+      Object.keys(t.adds || {}).forEach(pid => {
+        if (String(t.adds[pid]) === String(rid)) gets.push(playerDisplayName(pid));
+      });
+
+      (t.draft_picks || []).forEach(p => {
+        if (String(p.owner_id) === String(rid)) {
+          const pos = getPickPosition(p.season, p.roster_id, p.round);
+          gets.push(`<span class="tx-pick">${p.season} Round ${p.round}${pos ? ' (' + pos.slot + ')' : ''}</span> <span class="player-pos">orig ${teamName(p.roster_id)}</span>`);
+        }
+      });
+
+      (Array.isArray(t.waiver_budget) ? t.waiver_budget : []).forEach(wb => {
+        if (String(wb.receiver) === String(rid)) gets.push(`$${wb.amount} FAAB`);
+      });
+
+      lines += `<div class="tx-line">${teamLink(rid)} receives: ${gets.length ? gets.join(', ') : '<span class="player-pos">nothing</span>'}</div>`;
+    });
+  } else {
+    (t.roster_ids || []).forEach(rid => {
+      const added = Object.keys(t.adds || {}).filter(pid => String(t.adds[pid]) === String(rid));
+      const dropped = Object.keys(t.drops || {}).filter(pid => String(t.drops[pid]) === String(rid));
+
+      const bits = [];
+      added.forEach(pid => bits.push(`<span class="tx-add">+ ${playerDisplayName(pid)}</span>`));
+      dropped.forEach(pid => bits.push(`<span class="tx-drop">&minus; ${playerDisplayName(pid)}</span>`));
+
+      const bid = t.settings && t.settings.waiver_bid != null ? ` <span class="player-pos">($${t.settings.waiver_bid} bid)</span>` : '';
+
+      if (bits.length) {
+        lines += `<div class="tx-line">${teamLink(rid)}: ${bits.join(' · ')}${bid}</div>`;
+      }
+    });
+  }
+
+  if (!lines) lines = `<div class="tx-line"><span class="player-pos">No player movement recorded</span></div>`;
+
+  return `
+    <div class="tx-card">
+      <div class="tx-top">
+        <span class="tx-badge ${t.type}">${txTypeLabel(t.type)}</span>
+        <span class="tx-date">${date}</span>
+      </div>
+      ${lines}
+    </div>
+  `;
+}
+
+/* ---------- trending players ---------- */
+
+function renderTrending() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">Trending Across Sleeper (last 24h)</div>
+    <div class="hint">League-wide NFL add/drop trends from the Sleeper API — handy for waiver ideas</div>
+    <div id="trendingArea">
+      <div class="status"><div class="spinner"></div><p>Loading trending players...</p></div>
+    </div>
+  `;
+
+  loadTrending();
+}
+
+async function loadTrending() {
+  const s = state;
+
+  if (!s.trending && !s.trendingLoading) {
+    s.trendingLoading = true;
+
+    const [add, drop] = await Promise.all([
+      fetchJSON(API + '/players/nfl/trending/add?lookback_hours=24&limit=15').catch(() => []),
+      fetchJSON(API + '/players/nfl/trending/drop?lookback_hours=24&limit=15').catch(() => [])
+    ]);
+
+    s.trending = { add: add || [], drop: drop || [] };
+    s.trendingLoading = false;
+  }
+
+  if (s !== state || state.activeTab !== 'trending' || !state.trending) return;
+
+  const target = document.getElementById('trendingArea');
+  if (!target) return;
+
+  const listHtml = (list, cls) => list.length
+    ? list.map(t => `
+        <div class="roster-row">
+          <span class="player-name ${cls}">${playerDisplayName(t.player_id)}
+            <span class="selection-pos">${playerMeta(t.player_id)}</span>
+          </span>
+          <span class="trend-count">${(t.count || 0).toLocaleString()}</span>
+        </div>
+      `).join('')
+    : '<div class="empty">Nothing trending</div>';
+
+  target.innerHTML = `
+    <div class="trend-grid">
+      <div class="detail-box">
+        <div class="detail-title">Most Added</div>
+        <div class="roster-list">${listHtml(state.trending.add, 'tx-add')}</div>
+      </div>
+      <div class="detail-box">
+        <div class="detail-title">Most Dropped</div>
+        <div class="roster-list">${listHtml(state.trending.drop, 'tx-drop')}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- settings ---------- */
+
+function scoringLabel() {
+  const s = state.league && state.league.scoring_settings;
+  if (!s || s.rec == null) return '';
+  if (s.rec === 1) return 'PPR';
+  if (s.rec === 0.5) return 'Half PPR';
+  if (s.rec === 0) return 'Standard';
+  return s.rec + ' PPR';
+}
+
+function renderSettings() {
+  const league = state.league;
+
+  const infoRows = [];
+
+  if (league) {
+    infoRows.push(['League', league.name || '—']);
+    infoRows.push(['Season', league.season || '—']);
+    infoRows.push(['Status', String(league.status || '—').replace(/_/g, ' ')]);
+    infoRows.push(['Teams', league.total_rosters || '—']);
+
+    const scoring = scoringLabel();
+    if (scoring) infoRows.push(['Scoring', scoring]);
+
+    if (league.settings && league.settings.draft_rounds) {
+      infoRows.push(['Draft rounds', league.settings.draft_rounds]);
+    }
+
+    if (league.settings && league.settings.playoff_week_start) {
+      infoRows.push(['Playoffs start', 'Week ' + league.settings.playoff_week_start]);
+    }
+
+    if (league.roster_positions) {
+      const starters = league.roster_positions.filter(p => p !== 'BN');
+      infoRows.push(['Lineup', starters.join(', ')]);
+    }
+  }
+
+  const isCustom = state.leagueId !== DEFAULT_LEAGUE_ID;
+
+  const html = `
+    <div class="settings-panel" style="margin-top:0;">
+      <h2>Settings</h2>
+
+      <div class="detail-title">Sleeper League ID</div>
+      <div class="hint">The site follows whatever league ID you save here — it's stored on this device, so the website travels with you. Paste a new ID any time your league changes.</div>
+
+      ${state.settingsError ? `<div class="settings-error">${state.settingsError}</div>` : ''}
+
+      <input class="settings-input" id="leagueIdInput" value="${state.leagueId}" placeholder="Sleeper league ID">
+
+      <div class="note-actions">
+        <button class="save-btn" id="saveLeagueBtn" onclick="saveLeagueId()">Save &amp; Load League</button>
+        ${isCustom ? `<button class="cancel-btn" onclick="resetLeagueId()">Reset to Home League</button>` : ''}
+      </div>
+
+      ${league ? `
+        <div class="detail-title" style="margin-top:24px;">Current League</div>
+        <div class="detail-box">
+          <div class="roster-list">
+            ${infoRows.map(([k, v]) => `
+              <div class="roster-row">
+                <span class="player-pos">${k}</span>
+                <span style="text-align:right;">${v}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
 
   document.getElementById('mainContent').innerHTML = html;
 }
+
+async function saveLeagueId() {
+  const input = document.getElementById('leagueIdInput');
+  const newId = (input ? input.value : '').trim();
+
+  if (!newId) {
+    state.settingsError = 'Enter a league ID first.';
+    renderSettings();
+    return;
+  }
+
+  const btn = document.getElementById('saveLeagueBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+
+  try {
+    await fetchJSON(API + '/league/' + newId);
+  } catch(e) {
+    state.settingsError = 'Could not find a Sleeper league with ID "' + newId + '" (' + e.message + ')';
+    renderSettings();
+    return;
+  }
+
+  try { localStorage.setItem(LEAGUE_ID_STORAGE_KEY, newId); } catch(e) {}
+
+  applyLeagueChange();
+}
+
+function resetLeagueId() {
+  try { localStorage.removeItem(LEAGUE_ID_STORAGE_KEY); } catch(e) {}
+  applyLeagueChange();
+}
+
+function applyLeagueChange() {
+  const notesUnlocked = state.notesUnlocked;
+  state = freshState();
+  state.notesUnlocked = notesUnlocked;
+  state.activeTab = 'board';
+
+  document.querySelectorAll('.tab').forEach(button => {
+    button.classList.toggle('active', button.dataset.tab === 'board');
+  });
+
+  init();
+}
+
+/* ---------- league notes ---------- */
 
 async function loadNotes() {
   const snap = await db.collection(NOTES_COLLECTION).get();
