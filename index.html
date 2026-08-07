@@ -603,6 +603,127 @@ body.modal-open { overflow:hidden; }
   margin-bottom:10px;
 }
 
+.coach-fab {
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  background:var(--card);
+  border:1px solid var(--accent);
+  color:var(--accent);
+  font-size:1.5rem;
+  line-height:1;
+  cursor:pointer;
+  z-index:200;
+  box-shadow:0 6px 20px rgba(0,0,0,.5);
+}
+
+.coach-fab:hover { background:var(--surface); }
+
+body.modal-open .coach-fab { display:none; }
+
+.coach-sub {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+  margin-bottom:16px;
+}
+
+.verdict {
+  display:inline-block;
+  font-family:'DM Mono', monospace;
+  font-size:.66rem;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  border-radius:4px;
+  padding:3px 9px;
+  border:1px solid var(--border);
+  color:var(--muted);
+}
+
+.verdict.contend { color:var(--green); border-color:rgba(74,232,160,.5); }
+.verdict.rebuild { color:var(--accent2); border-color:rgba(74,157,232,.5); }
+
+.need-bar-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:6px 0;
+}
+
+.need-bar-label {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  color:var(--muted);
+  width:34px;
+  flex:none;
+}
+
+.need-bar {
+  flex:1;
+  height:8px;
+  background:rgba(255,255,255,.06);
+  border-radius:999px;
+  overflow:hidden;
+}
+
+.need-bar span {
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:var(--green);
+}
+
+.need-bar.weak span { background:var(--danger); }
+.need-bar.mid span { background:var(--accent); }
+
+.need-bar-note {
+  font-family:'DM Mono', monospace;
+  font-size:.68rem;
+  color:var(--muted);
+  width:82px;
+  flex:none;
+  text-align:right;
+}
+
+.trade-card {
+  background:rgba(0,0,0,.22);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+}
+
+.trade-side {
+  display:flex;
+  gap:8px;
+  padding:5px 0;
+  align-items:flex-start;
+}
+
+.trade-arrow {
+  font-family:'DM Mono', monospace;
+  font-size:.72rem;
+  flex:none;
+  width:58px;
+}
+
+.trade-arrow.get { color:var(--green); }
+.trade-arrow.give { color:var(--danger); }
+
+.trade-assets { font-size:.9rem; }
+
+.trade-why {
+  font-size:.84rem;
+  color:var(--muted);
+  border-top:1px solid var(--border);
+  margin-top:10px;
+  padding-top:10px;
+}
+
+.trade-why b { color:var(--text); font-weight:600; }
+
 .empty, .error-msg {
   background:var(--card);
   border:1px solid var(--border);
@@ -645,6 +766,8 @@ body.modal-open { overflow:hidden; }
     <p>Fetching league data...</p>
   </div>
 </div>
+
+<button class="coach-fab" id="coachFab" title="Trade & roster analyzer" onclick="openCoach()">🏈</button>
 
 <div id="modalRoot"></div>
 
@@ -718,6 +841,7 @@ function freshState() {
     trendingLoading:false,
     activeTab:'board',
     notesUnlocked:false,
+    coachUnlocked:false,
     editingNoteId:null,
     notes:[],
     settingsError:''
@@ -1352,6 +1476,673 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeTeamCard();
 });
 
+/* ---------- coach: valuation model ---------- */
+
+// Sleeper's search_rank is a popularity-weighted ordering, so we don't use the raw
+// number — we re-rank players inside their own position and work from that.
+const POS_PEAK_SF = { QB:9500, RB:8000, WR:9000, TE:7000 };
+const POS_PEAK_1QB = { QB:5200, RB:8000, WR:9000, TE:7000 };
+const POS_TAU = { QB:13, RB:10, WR:12, TE:5.5 };
+const STARTABLE_DEPTH = { QB:16, RB:24, WR:24, TE:10 };
+
+// Dynasty age curves: [maxAge, multiplier applied to production value]
+const AGE_CURVE = {
+  QB: [[24,1.30],[27,1.22],[30,1.08],[32,0.92],[34,0.72],[99,0.50]],
+  RB: [[22,1.32],[24,1.22],[25,1.05],[26,0.90],[27,0.74],[28,0.58],[29,0.44],[99,0.28]],
+  WR: [[22,1.34],[24,1.26],[26,1.14],[28,1.00],[29,0.84],[30,0.68],[31,0.54],[99,0.38]],
+  TE: [[23,1.26],[25,1.18],[28,1.08],[30,0.92],[32,0.72],[99,0.52]]
+};
+
+const INJURY_DISCOUNT = { IR:0.72, PUP:0.80, Out:0.80, NA:0.85, Sus:0.82, DNR:0.75, COV:0.95, Questionable:0.97 };
+
+let coach = null;
+
+function isSuperflex() {
+  const rp = (state.league && state.league.roster_positions) || [];
+  return rp.indexOf('SUPER_FLEX') !== -1 || rp.filter(p => p === 'QB').length > 1;
+}
+
+function starterCounts() {
+  const rp = (state.league && state.league.roster_positions) || [];
+  const c = { QB:0, RB:0, WR:0, TE:0, FLEX:0, SUPER_FLEX:0 };
+  rp.forEach(p => { if (c[p] !== undefined) c[p]++; });
+  if (!c.QB && !c.SUPER_FLEX) c.QB = 1;
+  if (!c.RB) c.RB = 2;
+  if (!c.WR) c.WR = 2;
+  if (!c.TE) c.TE = 1;
+  return c;
+}
+
+function buildValueModel() {
+  const sf = isSuperflex();
+  const peak = sf ? POS_PEAK_SF : POS_PEAK_1QB;
+  const byPos = { QB:[], RB:[], WR:[], TE:[] };
+
+  Object.keys(state.players).forEach(pid => {
+    const p = state.players[pid];
+    if (!p || !p.active || !p.team) return;
+    if (typeof p.search_rank !== 'number' || p.search_rank >= 9000) return;
+    if (!byPos[p.position]) return;
+    byPos[p.position].push(p);
+  });
+
+  const rank = {};
+  Object.keys(byPos).forEach(pos => {
+    byPos[pos].sort((a,b) =>
+      (a.search_rank - b.search_rank) || String(a.full_name||'').localeCompare(String(b.full_name||''))
+    );
+    byPos[pos].forEach((p, i) => rank[String(p.player_id)] = i + 1);
+  });
+
+  const baseCache = {};
+  const dynCache = {};
+
+  function baseValue(pid) {
+    const key = String(pid);
+    if (baseCache[key] !== undefined) return baseCache[key];
+
+    const p = state.players[key];
+    const r = rank[key];
+    let v = 0;
+
+    if (p && r && peak[p.position]) {
+      v = peak[p.position] * Math.exp(-(r - 1) / POS_TAU[p.position]);
+      v *= INJURY_DISCOUNT[p.injury_status] || 1;
+    }
+
+    baseCache[key] = v;
+    return v;
+  }
+
+  function ageMult(pos, age) {
+    const curve = AGE_CURVE[pos];
+    if (!curve || age == null) return 1;
+    for (let i = 0; i < curve.length; i++) {
+      if (age <= curve[i][0]) return curve[i][1];
+    }
+    return 1;
+  }
+
+  function dynValue(pid) {
+    const key = String(pid);
+    if (dynCache[key] !== undefined) return dynCache[key];
+    const p = state.players[key];
+    const v = p ? baseValue(key) * ageMult(p.position, p.age) : 0;
+    dynCache[key] = v;
+    return v;
+  }
+
+  function startable(pid) {
+    const p = state.players[String(pid)];
+    const r = rank[String(pid)];
+    return !!(p && r && STARTABLE_DEPTH[p.position] && r <= STARTABLE_DEPTH[p.position]);
+  }
+
+  return { sf, rank, baseValue, dynValue, startable, posRank: pid => rank[String(pid)] || null };
+}
+
+function pickValueFor(season, round, overall, teams) {
+  const n = teams || 12;
+  const slot = overall ? overall : (round - 1) * n + Math.ceil(n / 2);
+  const v = 6000 * Math.exp(-(slot - 1) / 9);
+  const seasonsOut = Math.max(0, Number(season) - Number((state.league && state.league.season) || season));
+  return v * Math.pow(0.80, seasonsOut);
+}
+
+function coachPicks(rosterId) {
+  return getAllOwnedPicks(rosterId).map(p => ({
+    label: p.exactSlot ? (p.year + ' ' + p.exactSlot) : (p.year + ' R' + p.round),
+    year: p.year,
+    round: p.round,
+    overall: p.overall,
+    value: pickValueFor(p.year, p.round, p.overall, state.rosters.length)
+  })).sort((a,b) => b.value - a.value);
+}
+
+function optimalLineup(playerIds, M) {
+  const counts = starterCounts();
+  const byPos = {};
+  playerIds.forEach(pid => {
+    const pos = playerPositionOf(pid);
+    if (!byPos[pos]) byPos[pos] = [];
+    byPos[pos].push(pid);
+  });
+  Object.keys(byPos).forEach(k => byPos[k].sort((a,b) => M.baseValue(b) - M.baseValue(a)));
+
+  const used = {};
+  const picked = [];
+  let total = 0;
+  let filled = true;
+
+  ['QB','RB','WR','TE'].forEach(pos => {
+    const need = counts[pos] || 0;
+    const have = (byPos[pos] || []).filter(p => !used[p]);
+    if (have.length < need) filled = false;
+    have.slice(0, need).forEach(p => { used[p] = 1; picked.push(p); total += M.baseValue(p); });
+  });
+
+  for (let i = 0; i < (counts.FLEX || 0); i++) {
+    const pool = playerIds.filter(p => !used[p] && ['RB','WR','TE'].indexOf(playerPositionOf(p)) !== -1)
+      .sort((a,b) => M.baseValue(b) - M.baseValue(a));
+    if (!pool.length) { filled = false; break; }
+    used[pool[0]] = 1; picked.push(pool[0]); total += M.baseValue(pool[0]);
+  }
+
+  for (let i = 0; i < (counts.SUPER_FLEX || 0); i++) {
+    const pool = playerIds.filter(p => !used[p] && ['QB','RB','WR','TE'].indexOf(playerPositionOf(p)) !== -1)
+      .sort((a,b) => M.baseValue(b) - M.baseValue(a));
+    if (!pool.length) { filled = false; break; }
+    used[pool[0]] = 1; picked.push(pool[0]); total += M.baseValue(pool[0]);
+  }
+
+  return { total, filled, picked };
+}
+
+function analyzeTeam(rosterId, M) {
+  const roster = state.rosters.find(r => String(r.roster_id) === String(rosterId));
+  const players = ((roster && roster.players) || []).map(String);
+
+  const byPos = {};
+  players.forEach(pid => {
+    const pos = playerPositionOf(pid);
+    if (!byPos[pos]) byPos[pos] = [];
+    byPos[pos].push(pid);
+  });
+  Object.keys(byPos).forEach(k => byPos[k].sort((a,b) => M.baseValue(b) - M.baseValue(a)));
+
+  const lineup = optimalLineup(players, M);
+  const picks = coachPicks(rosterId);
+  const counts = starterCounts();
+
+  // Strength at each starting spot = average value of the players who'd fill it.
+  const strength = {};
+  ['QB','RB','WR','TE'].forEach(pos => {
+    const req = (counts[pos] || 0) + (pos === 'QB' && M.sf ? (counts.SUPER_FLEX || 0) : 0);
+    const need = Math.max(1, req);
+    const have = (byPos[pos] || []).slice(0, need).map(p => M.baseValue(p));
+    while (have.length < need) have.push(0);
+    strength[pos] = have.reduce((a,b) => a + b, 0) / need;
+  });
+
+  const future = players.reduce((sum,p) => sum + M.dynValue(p), 0)
+    + picks.reduce((sum,p) => sum + p.value, 0);
+
+  const weighted = players.filter(p => M.baseValue(p) > 500 && state.players[p] && state.players[p].age);
+  const wAge = weighted.length
+    ? weighted.reduce((s,p) => s + state.players[p].age * M.baseValue(p), 0) /
+      weighted.reduce((s,p) => s + M.baseValue(p), 0)
+    : 26;
+
+  return { rosterId:String(rosterId), players, byPos, lineup, picks, strength,
+           now:lineup.total, future, age:wAge, roster };
+}
+
+function analyzeLeague() {
+  const M = buildValueModel();
+  const teams = {};
+  state.rosters.forEach(r => teams[String(r.roster_id)] = analyzeTeam(r.roster_id, M));
+
+  const ids = Object.keys(teams);
+  const nows = ids.map(i => teams[i].now).sort((a,b) => a - b);
+  const median = nows[Math.floor(nows.length / 2)];
+
+  const avg = {};
+  ['QB','RB','WR','TE'].forEach(pos => {
+    avg[pos] = ids.reduce((s,i) => s + teams[i].strength[pos], 0) / ids.length;
+  });
+
+  ids.forEach(i => {
+    const t = teams[i];
+    t.mode = t.now >= median ? 'contend' : 'rebuild';
+    t.wNow = t.mode === 'contend' ? 0.72 : 0.32;
+    t.pickMult = t.mode === 'contend' ? 0.82 : 1.18;
+    t.deficit = {};
+    t.posMult = {};
+    ['QB','RB','WR','TE'].forEach(pos => {
+      t.deficit[pos] = avg[pos] > 0 ? Math.max(0, (avg[pos] - t.strength[pos]) / avg[pos]) : 0;
+      t.posMult[pos] = 1 + 0.5 * t.deficit[pos];
+    });
+  });
+
+  return { M, teams, avg, median };
+}
+
+/* ---------- coach: trade engine ---------- */
+
+function valueTo(team, pid, M) {
+  const v = team.wNow * M.baseValue(pid) + (1 - team.wNow) * M.dynValue(pid);
+  return v * (team.posMult[playerPositionOf(pid)] || 1);
+}
+
+function surplusPlayers(team, M) {
+  const keep = { QB: M.sf ? 2 : 1, RB:3, WR:3, TE:1 };
+  const out = [];
+
+  Object.keys(team.byPos).forEach(pos => {
+    if (!keep[pos]) return;
+
+    // A rebuilding team should be willing to sell its win-now piece at a spot
+    // it's already strong at — that's the whole point of rebuilding.
+    const floor = (team.mode === 'rebuild' && team.deficit[pos] === 0) ? 0 : 1;
+
+    team.byPos[pos].forEach((pid, i) => {
+      if (M.baseValue(pid) < 350) return;
+      if (i >= keep[pos] || (i >= floor && team.deficit[pos] === 0)) out.push(pid);
+    });
+  });
+
+  return out.sort((a,b) => M.dynValue(b) - M.dynValue(a));
+}
+
+function teamWants(team, pid, M) {
+  const pos = playerPositionOf(pid);
+  if (!team.deficit[pos] && team.deficit[pos] !== 0) return false;
+
+  const counts = starterCounts();
+  const req = pos === 'QB' && M.sf
+    ? (counts.QB || 0) + (counts.SUPER_FLEX || 0)
+    : (counts[pos] || 1);
+
+  const current = (team.byPos[pos] || []).filter(p => M.startable(p));
+
+  // Already stacked at this spot — only a genuine upgrade on their best moves the needle.
+  if (current.length > req + 1) {
+    return M.baseValue(pid) > M.baseValue(current[0]) * 1.15;
+  }
+  if (team.deficit[pos] > 0.05) return true;
+
+  const worst = current.length >= req ? M.baseValue(current[req - 1]) : 0;
+  return M.baseValue(pid) > worst * 1.25;
+}
+
+function combosOf(items, maxN) {
+  const res = [];
+  const rec = (start, cur, n) => {
+    if (cur.length === n) { res.push(cur.slice()); return; }
+    for (let i = start; i < items.length; i++) {
+      cur.push(items[i]);
+      rec(i + 1, cur, n);
+      cur.pop();
+    }
+  };
+  for (let n = 1; n <= maxN; n++) rec(0, [], n);
+  return res;
+}
+
+function tradeViable(team, lose, gain, picksOut, picksIn, M) {
+  const loseSet = {};
+  lose.forEach(p => loseSet[p] = 1);
+  const after = team.players.filter(p => !loseSet[p]).concat(gain);
+
+  const line = optimalLineup(after, M);
+  if (!line.filled) return false;
+
+  if (M.sf) {
+    const qbs = after.filter(p => playerPositionOf(p) === 'QB')
+      .sort((a,b) => M.baseValue(b) - M.baseValue(a));
+    if (qbs.length < 2 || M.baseValue(qbs[1]) < 250) return false;
+  }
+
+  const outSet = {};
+  picksOut.forEach(p => outSet[p.label + '|' + p.value] = 1);
+
+  const futureAfter = after.reduce((s,p) => s + M.dynValue(p), 0)
+    + team.picks.filter(p => !outSet[p.label + '|' + p.value]).reduce((s,p) => s + p.value, 0)
+    + picksIn.reduce((s,p) => s + p.value, 0);
+
+  // Contenders can't get worse right now; rebuilders must actually gain future value.
+  return team.mode === 'contend'
+    ? line.total >= team.now * 0.97
+    : futureAfter >= team.future * 1.01;
+}
+
+function findTrades(meId, league, limit) {
+  const M = league.M;
+  const me = league.teams[String(meId)];
+  const out = [];
+
+  const myPlayers = surplusPlayers(me, M).slice(0, 8);
+  const myPicks = me.picks.filter(p => p.value > 700).slice(0, 9);
+  const giveOptions = combosOf(
+    myPlayers.map(x => ({ t:'p', x })).concat(myPicks.map(x => ({ t:'k', x }))), 3);
+
+  Object.keys(league.teams).forEach(otherId => {
+    if (String(otherId) === String(meId)) return;
+    const other = league.teams[otherId];
+
+    const theirPlayers = surplusPlayers(other, M).filter(p => teamWants(me, p, M)).slice(0, 6);
+    const theirPicks = other.picks.filter(p => p.value > 1500).slice(0, 2);
+    const getOptions = combosOf(
+      theirPlayers.map(x => ({ t:'p', x })).concat(theirPicks.map(x => ({ t:'k', x }))), 2);
+
+    getOptions.forEach(get => {
+      const gp = get.filter(i => i.t === 'p').map(i => i.x);
+      const gk = get.filter(i => i.t === 'k').map(i => i.x);
+      const getN = gp.reduce((s,p) => s + M.dynValue(p), 0) + gk.reduce((s,p) => s + p.value, 0);
+      if (getN < 900) return;
+
+      giveOptions.forEach(give => {
+        const sp = give.filter(i => i.t === 'p').map(i => i.x);
+        const sk = give.filter(i => i.t === 'k').map(i => i.x);
+        const giveN = sp.reduce((s,p) => s + M.dynValue(p), 0) + sk.reduce((s,p) => s + p.value, 0);
+        if (giveN <= 0) return;
+
+        // Fair on a neutral dynasty board, and never a recommendation to overpay.
+        if (Math.abs(giveN - getN) / Math.max(giveN, getN) > 0.15) return;
+        if (getN < giveN * 0.90) return;
+        if (sp.length && !sp.some(p => teamWants(other, p, M))) return;
+
+        const myGain = gp.reduce((s,p) => s + valueTo(me,p,M), 0) + gk.reduce((s,p) => s + p.value*me.pickMult, 0)
+                     - sp.reduce((s,p) => s + valueTo(me,p,M), 0) - sk.reduce((s,p) => s + p.value*me.pickMult, 0);
+        const thGain = sp.reduce((s,p) => s + valueTo(other,p,M), 0) + sk.reduce((s,p) => s + p.value*other.pickMult, 0)
+                     - gp.reduce((s,p) => s + valueTo(other,p,M), 0) - gk.reduce((s,p) => s + p.value*other.pickMult, 0);
+        if (myGain <= 50 || thGain <= 50) return;
+
+        if (!tradeViable(me, sp, gp, sk, gk, M)) return;
+        if (!tradeViable(other, gp, sp, gk, sk, M)) return;
+
+        out.push({ otherId:String(otherId), gp, gk, sp, sk, myGain, thGain,
+                   score: Math.min(myGain, thGain), getN, giveN });
+      });
+    });
+  });
+
+  out.sort((a,b) => b.score - a.score);
+
+  // One suggestion per partner keeps the board varied.
+  const seen = {};
+  const final = [];
+  out.forEach(t => {
+    if (seen[t.otherId]) return;
+    seen[t.otherId] = 1;
+    final.push(t);
+  });
+
+  return final.slice(0, limit || 5);
+}
+
+/* ---------- coach: report ---------- */
+
+function assetLabel(pid, M) {
+  const p = state.players[String(pid)] || {};
+  const bits = [p.position, p.team, p.age ? 'age ' + p.age : ''].filter(Boolean).join(' · ');
+  const r = M.posRank(pid);
+  return `<b>${playerDisplayName(pid)}</b> <span class="player-pos">${bits}${r ? ' · ' + p.position + r : ''}</span>`;
+}
+
+function packageHtml(players, picks, M) {
+  return players.map(p => assetLabel(p, M))
+    .concat(picks.map(k => `<b>${k.label}</b>`))
+    .join('<br>');
+}
+
+function weakestSpots(team) {
+  return ['QB','RB','WR','TE']
+    .filter(pos => team.deficit[pos] > 0.05)
+    .sort((a,b) => team.deficit[b] - team.deficit[a]);
+}
+
+function tradeRationale(t, me, other, M) {
+  const myGot = {};
+  t.gp.forEach(p => myGot[playerPositionOf(p)] = 1);
+  const fixes = Object.keys(myGot).filter(pos => me.deficit[pos] > 0.05);
+
+  const theirGot = {};
+  t.sp.forEach(p => theirGot[playerPositionOf(p)] = 1);
+  const theirFixes = Object.keys(theirGot).filter(pos => other.deficit[pos] > 0.05);
+
+  const youBits = [];
+  if (fixes.length) youBits.push('upgrades your weakest starting spot' + (fixes.length > 1 ? 's' : '') + ' (' + fixes.join(', ') + ')');
+  if (t.gk.length) youBits.push('adds draft capital');
+  if (t.sk.length) youBits.push('spends from your ' + me.picks.length + '-pick stockpile instead of your starters');
+  if (t.sp.length && !fixes.length) youBits.push('converts surplus depth into a better starter');
+  if (!youBits.length) youBits.push('nets you more value than it costs');
+
+  const themBits = [];
+  if (theirFixes.length) themBits.push('fills their ' + theirFixes.join('/') + ' hole');
+  if (other.mode === 'rebuild') {
+    if (t.sk.length) themBits.push('they are rebuilding and bank future picks');
+    else themBits.push('they are rebuilding and get the younger side of the deal');
+  } else {
+    themBits.push('they are contending and this makes their lineup better now');
+  }
+
+  const oldest = t.sp.concat(t.gp)
+    .map(p => state.players[String(p)])
+    .filter(p => p && p.age);
+
+  let note = '';
+  const risky = t.gp.filter(p => {
+    const pl = state.players[String(p)];
+    return pl && pl.injury_status;
+  });
+  if (risky.length) {
+    note = ' Heads up: ' + risky.map(p =>
+      playerDisplayName(p) + ' is listed ' + state.players[String(p)].injury_status).join(', ') + '.';
+  }
+
+  return `<b>Why you do it:</b> ${youBits.join('; ')}. <b>Why they say yes:</b> ${themBits.join('; ')}.${note}`;
+}
+
+function coachReport(rosterId) {
+  const league = analyzeLeague();
+  const M = league.M;
+  const me = league.teams[String(rosterId)];
+
+  if (!me) return '<div class="empty">No roster found</div>';
+
+  const weak = weakestSpots(me);
+  const counts = starterCounts();
+
+  let html = `
+    <div class="team-panel-top">
+      <div class="team-with-avatar">
+        ${avatarHtml(rosterId, 40)}
+        <div>
+          <h2>${teamName(rosterId)}</h2>
+          <div class="record-line">
+            <span class="verdict ${me.mode}">${me.mode === 'contend' ? 'Contending' : 'Rebuilding'}</span>
+            &nbsp;avg age ${me.age.toFixed(1)} · ${me.picks.length} picks
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="coach-sub">
+      Values are built from each player's rank within his own position, then re-weighted for
+      dynasty age curves, ${M.sf ? 'superflex QB premium' : 'single-QB scoring'} and
+      ${scoringLabel() || 'league'} scoring. Injury and roster status come from Sleeper.
+    </div>
+  `;
+
+  // Positional strength
+  const maxStrength = Math.max.apply(null, ['QB','RB','WR','TE'].map(p => league.avg[p] * 1.6));
+
+  html += `<div class="detail-box"><div class="detail-title">Starting Lineup Strength vs League</div>`;
+  ['QB','RB','WR','TE'].forEach(pos => {
+    const pct = Math.max(3, Math.min(100, (me.strength[pos] / maxStrength) * 100));
+    const d = me.deficit[pos];
+    const cls = d > 0.25 ? 'weak' : (d > 0.05 ? 'mid' : '');
+    const note = d > 0.25 ? 'weak spot' : (d > 0.05 ? 'below avg' : 'strength');
+    html += `
+      <div class="need-bar-row">
+        <span class="need-bar-label">${pos}</span>
+        <span class="need-bar ${cls}"><span style="width:${pct}%"></span></span>
+        <span class="need-bar-note">${note}</span>
+      </div>
+    `;
+  });
+  html += `</div>`;
+
+  // Lineup check
+  // Only compare the spots this model actually values — DEF/K aren't scored here.
+  const setStarters = ((me.roster && me.roster.starters) || [])
+    .map(String)
+    .filter(p => p && p !== '0' && ['QB','RB','WR','TE'].indexOf(playerPositionOf(p)) !== -1);
+  const optimal = me.lineup.picked.map(String);
+  const shouldStart = optimal.filter(p => setStarters.indexOf(p) === -1);
+  const shouldSit = setStarters.filter(p => optimal.indexOf(p) === -1);
+
+  if (shouldStart.length && setStarters.length) {
+    html += `<div class="detail-title">Lineup Check</div><div class="detail-box">`;
+    html += `<div class="tx-line"><span class="tx-add">Start:</span> ${shouldStart.map(p => assetLabel(p, M)).join(', ')}</div>`;
+    if (shouldSit.length) {
+      html += `<div class="tx-line"><span class="tx-drop">Over:</span> ${shouldSit.map(p => assetLabel(p, M)).join(', ')}</div>`;
+    }
+    html += `<div class="trade-why">Based on current production value. In the offseason Sleeper often holds a stale lineup, so re-check once games start.</div>`;
+    html += `</div>`;
+  }
+
+  // Trades
+  const trades = findTrades(rosterId, league, 5);
+
+  html += `<div class="detail-title">Trades Worth Offering</div>`;
+
+  if (!trades.length) {
+    html += `<div class="empty">No trade clears the fairness bar right now — every match either overpays or leaves one side's lineup worse.</div>`;
+  } else {
+    html += `<div class="list-stack">`;
+    trades.forEach(t => {
+      const other = league.teams[t.otherId];
+      const otherWeak = weakestSpots(other);
+      html += `
+        <div class="trade-card">
+          <div class="tx-top">
+            <span class="tx-badge trade">with ${teamName(t.otherId)}</span>
+            <span class="verdict ${other.mode}">${other.mode === 'contend' ? 'contending' : 'rebuilding'}</span>
+            <span class="tx-date">${otherWeak.length ? 'needs ' + otherWeak.join('/') : 'needs depth'}</span>
+          </div>
+          <div class="trade-side">
+            <span class="trade-arrow get">You get</span>
+            <span class="trade-assets">${packageHtml(t.gp, t.gk, M)}</span>
+          </div>
+          <div class="trade-side">
+            <span class="trade-arrow give">You send</span>
+            <span class="trade-assets">${packageHtml(t.sp, t.sk, M)}</span>
+          </div>
+          <div class="trade-why">${tradeRationale(t, me, other, M)}</div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  // Sell-high / hold-risk: players about to fall off the dynasty age cliff
+  const cliff = me.players
+    .filter(p => {
+      const pl = state.players[String(p)];
+      if (!pl || !pl.age || M.baseValue(p) < 900) return false;
+      const drop = M.dynValue(p) / M.baseValue(p);
+      return drop < 0.92;
+    })
+    .sort((a,b) => M.baseValue(b) - M.baseValue(a))
+    .slice(0, 5);
+
+  if (cliff.length) {
+    html += `<div class="detail-title">Sell Before the Cliff</div><div class="detail-box"><div class="roster-list">`;
+    cliff.forEach(p => {
+      const pl = state.players[String(p)];
+      html += `
+        <div class="roster-row">
+          <span class="player-name">${playerDisplayName(p)}${playerInjuryTag(p)}</span>
+          <span class="player-pos">${pl.position} · age ${pl.age} · still produces, dynasty value falling</span>
+        </div>
+      `;
+    });
+    html += `</div><div class="trade-why">These still carry real win-now value, which is exactly why a contender will pay for them. Value drops fastest in the next 12 months.</div></div>`;
+  }
+
+  // Free agents worth a look
+  const rostered = {};
+  state.rosters.forEach(r => (r.players || []).forEach(p => rostered[String(p)] = 1));
+
+  // No value filter here on purpose: search_rank lags breaking news, so a spike in
+  // adds is often the only signal that something just happened to this player.
+  const fa = ((state.trending && state.trending.add) || [])
+    .map(t => String(t.player_id))
+    .filter(pid => {
+      const p = state.players[pid];
+      return !rostered[pid] && p && ['QB','RB','WR','TE'].indexOf(p.position) !== -1;
+    })
+    .slice(0, 6);
+
+  if (fa.length) {
+    html += `<div class="detail-title">Free Agents the Market Is Moving On</div><div class="detail-box"><div class="roster-list">`;
+    fa.forEach(pid => {
+      html += `
+        <div class="roster-row">
+          <span class="player-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}</span>
+          <span class="player-pos">${playerMeta(pid)}</span>
+        </div>
+      `;
+    });
+    html += `</div><div class="trade-why">Unrostered in your league and among the most-added players across Sleeper in the last 24 hours — the closest thing the API gives to a live news signal.</div></div>`;
+  }
+
+  return html;
+}
+
+function renderCoach(rosterId) {
+  const root = document.getElementById('modalRoot');
+  const options = state.rosters
+    .map(r => String(r.roster_id))
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)))
+    .map(rid => `<option value="${rid}" ${rid === String(rosterId) ? 'selected' : ''}>${teamName(rid)}</option>`)
+    .join('');
+
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if (event.target === this) closeTeamCard()">
+      <div class="modal-card">
+        <button class="back-btn" onclick="closeTeamCard()">&larr; Back</button>
+        <div class="year-selector">
+          <span class="section-label" style="margin:0;">Analyzing</span>
+          <select class="year-select" onchange="renderCoach(this.value)">${options}</select>
+        </div>
+        <div id="coachBody">
+          <div class="status"><div class="spinner"></div><p>Crunching rosters...</p></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.classList.add('modal-open');
+
+  // Let the spinner paint before the (synchronous) analysis runs.
+  setTimeout(() => {
+    const body = document.getElementById('coachBody');
+    if (!body) return;
+    try {
+      body.innerHTML = coachReport(rosterId);
+    } catch(e) {
+      body.innerHTML = '<div class="error-msg">Analysis failed: ' + e.message + '</div>';
+    }
+  }, 30);
+}
+
+function defaultCoachRoster() {
+  const mine = state.rosters.find(r => teamName(r.roster_id) === 'Jaren');
+  return String(mine ? mine.roster_id : (state.rosters[0] ? state.rosters[0].roster_id : ''));
+}
+
+async function openCoach() {
+  if (!state.rosters.length) {
+    alert('League data is still loading.');
+    return;
+  }
+
+  if (!state.coachUnlocked) {
+    const pass = prompt('Enter passcode:');
+    if (pass === null) return;
+    if (pass !== NOTE_PASSCODE) { alert('Incorrect passcode.'); return; }
+    state.coachUnlocked = true;
+  }
+
+  // Trending doubles as the free-agent news signal.
+  if (!state.trending && !state.trendingLoading) await loadTrending();
+
+  renderCoach(defaultCoachRoster());
+}
+
 /* ---------- standings + playoff brackets ---------- */
 
 function renderStandings() {
@@ -1891,8 +2682,10 @@ function resetLeagueId() {
 
 function applyLeagueChange() {
   const notesUnlocked = state.notesUnlocked;
+  const coachUnlocked = state.coachUnlocked;
   state = freshState();
   state.notesUnlocked = notesUnlocked;
+  state.coachUnlocked = coachUnlocked;
   state.activeTab = 'board';
 
   document.querySelectorAll('.tab').forEach(button => {
