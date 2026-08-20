@@ -724,6 +724,12 @@ body.modal-open .coach-fab { display:none; }
 
 .trade-why b { color:var(--text); font-weight:600; }
 
+.news-title {
+  font-weight:600;
+  color:var(--accent);
+  margin:2px 0 6px;
+}
+
 .empty, .error-msg {
   background:var(--card);
   border:1px solid var(--border);
@@ -755,6 +761,7 @@ body.modal-open .coach-fab { display:none; }
     <button class="tab" data-tab="matchups" onclick="showTab('matchups')">Matchups</button>
     <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
     <button class="tab" data-tab="trending" onclick="showTab('trending')">Trending</button>
+    <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
     <button class="tab" data-tab="settings" onclick="showTab('settings')">Settings</button>
   </div>
@@ -839,6 +846,9 @@ function freshState() {
     bracketsLoading:false,
     trending:null,
     trendingLoading:false,
+    fc:null,
+    newsTeam:null,
+    newsByTeam:{},
     activeTab:'board',
     notesUnlocked:false,
     coachUnlocked:false,
@@ -993,6 +1003,7 @@ function renderTab() {
   else if (state.activeTab === 'matchups') renderMatchups();
   else if (state.activeTab === 'activity') renderActivity();
   else if (state.activeTab === 'trending') renderTrending();
+  else if (state.activeTab === 'news') renderNews();
   else if (state.activeTab === 'settings') renderSettings();
   else renderDraftBoard();
 }
@@ -1478,24 +1489,69 @@ document.addEventListener('keydown', e => {
 
 /* ---------- coach: valuation model ---------- */
 
-// Sleeper's search_rank is a popularity-weighted ordering, so we don't use the raw
-// number — we re-rank players inside their own position and work from that.
-const POS_PEAK_SF = { QB:9500, RB:8000, WR:9000, TE:7000 };
-const POS_PEAK_1QB = { QB:5200, RB:8000, WR:9000, TE:7000 };
-const POS_TAU = { QB:13, RB:10, WR:12, TE:5.5 };
+// Player and pick values come from FantasyCalc's live dynasty market — the same style
+// of crowd-sourced trade values as KeepTradeCut / DynastyCalc — pulled per league for
+// superflex, team count and PPR. `value` is the dynasty price and `redraftValue` the
+// win-now price; we keep both so contenders and rebuilders weigh moves differently.
 const STARTABLE_DEPTH = { QB:16, RB:24, WR:24, TE:10 };
 
-// Dynasty age curves: [maxAge, multiplier applied to production value]
-const AGE_CURVE = {
-  QB: [[24,1.30],[27,1.22],[30,1.08],[32,0.92],[34,0.72],[99,0.50]],
-  RB: [[22,1.32],[24,1.22],[25,1.05],[26,0.90],[27,0.74],[28,0.58],[29,0.44],[99,0.28]],
-  WR: [[22,1.34],[24,1.26],[26,1.14],[28,1.00],[29,0.84],[30,0.68],[31,0.54],[99,0.38]],
-  TE: [[23,1.26],[25,1.18],[28,1.08],[30,0.92],[32,0.72],[99,0.52]]
-};
-
+// Tiny fallback so deep players FantasyCalc doesn't price still sort sensibly beneath
+// everyone who does have a market value.
+const FALLBACK_PEAK = { QB:650, RB:750, WR:750, TE:450 };
 const INJURY_DISCOUNT = { IR:0.72, PUP:0.80, Out:0.80, NA:0.85, Sus:0.82, DNR:0.75, COV:0.95, Questionable:0.97 };
 
-let coach = null;
+// Fetches the current FantasyCalc dynasty values for this exact league shape and indexes
+// them by Sleeper player id, plus a map of rookie-pick label -> value.
+async function loadFantasyCalc() {
+  const s = state;
+  if (s.fc) return s.fc;
+
+  const numQbs = isSuperflex() ? 2 : 1;
+  const numTeams = s.rosters.length || 12;
+  const rec = s.league && s.league.scoring_settings && s.league.scoring_settings.rec;
+  const ppr = (rec == null ? 1 : rec);
+
+  const url = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=' +
+    numQbs + '&numTeams=' + numTeams + '&ppr=' + ppr;
+
+  let rows;
+  try {
+    rows = await fetchJSON(url);
+  } catch (e) {
+    const failed = { byId:{}, picks:{}, ok:false, err:e.message };
+    if (s === state) s.fc = failed;
+    return failed;
+  }
+
+  const byId = {};
+  const picks = {};
+
+  (rows || []).forEach(row => {
+    const p = row.player || {};
+    if (p.position === 'PICK') { picks[p.name] = row.value || 0; return; }
+    if (!p.sleeperId) return;
+    byId[String(p.sleeperId)] = {
+      value: row.value || 0,
+      redraft: (row.redraftValue != null ? row.redraftValue : row.value) || 0,
+      posRank: row.positionRank || null,
+      overallRank: row.overallRank || null
+    };
+  });
+
+  const fc = { byId:byId, picks:picks, ok:true, numTeams:numTeams };
+  if (s === state) s.fc = fc;
+  return fc;
+}
+
+async function fetchGraphQL(query) {
+  const r = await fetch('https://sleeper.com/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
 
 function isSuperflex() {
   const rp = (state.league && state.league.roster_positions) || [];
@@ -1515,9 +1571,11 @@ function starterCounts() {
 
 function buildValueModel() {
   const sf = isSuperflex();
-  const peak = sf ? POS_PEAK_SF : POS_PEAK_1QB;
-  const byPos = { QB:[], RB:[], WR:[], TE:[] };
+  const fc = state.fc || { byId:{}, picks:{} };
 
+  // Fallback ordering (Sleeper search_rank within position) only affects deep players
+  // FantasyCalc doesn't price — real starters are always on its board.
+  const byPos = { QB:[], RB:[], WR:[], TE:[] };
   Object.keys(state.players).forEach(pid => {
     const p = state.players[pid];
     if (!p || !p.active || !p.team) return;
@@ -1526,76 +1584,107 @@ function buildValueModel() {
     byPos[p.position].push(p);
   });
 
-  const rank = {};
+  const fbRank = {};
   Object.keys(byPos).forEach(pos => {
     byPos[pos].sort((a,b) =>
       (a.search_rank - b.search_rank) || String(a.full_name||'').localeCompare(String(b.full_name||''))
     );
-    byPos[pos].forEach((p, i) => rank[String(p.player_id)] = i + 1);
+    byPos[pos].forEach((p, i) => fbRank[String(p.player_id)] = i + 1);
   });
 
   const baseCache = {};
   const dynCache = {};
 
-  function baseValue(pid) {
-    const key = String(pid);
-    if (baseCache[key] !== undefined) return baseCache[key];
-
-    const p = state.players[key];
-    const r = rank[key];
-    let v = 0;
-
-    if (p && r && peak[p.position]) {
-      v = peak[p.position] * Math.exp(-(r - 1) / POS_TAU[p.position]);
-      v *= INJURY_DISCOUNT[p.injury_status] || 1;
-    }
-
-    baseCache[key] = v;
-    return v;
-  }
-
-  function ageMult(pos, age) {
-    const curve = AGE_CURVE[pos];
-    if (!curve || age == null) return 1;
-    for (let i = 0; i < curve.length; i++) {
-      if (age <= curve[i][0]) return curve[i][1];
-    }
-    return 1;
-  }
-
+  // Dynasty (long-term) value: FantasyCalc `value`, already age/market adjusted.
   function dynValue(pid) {
     const key = String(pid);
     if (dynCache[key] !== undefined) return dynCache[key];
-    const p = state.players[key];
-    const v = p ? baseValue(key) * ageMult(p.position, p.age) : 0;
+
+    let v = 0;
+    const f = fc.byId[key];
+    if (f) {
+      v = f.value;
+    } else {
+      const p = state.players[key];
+      const r = fbRank[key];
+      if (p && r && FALLBACK_PEAK[p.position]) {
+        v = FALLBACK_PEAK[p.position] * Math.exp(-(r - 1) / 8) * (INJURY_DISCOUNT[p.injury_status] || 1);
+      }
+    }
     dynCache[key] = v;
     return v;
   }
 
-  function startable(pid) {
-    const p = state.players[String(pid)];
-    const r = rank[String(pid)];
-    return !!(p && r && STARTABLE_DEPTH[p.position] && r <= STARTABLE_DEPTH[p.position]);
+  // Win-now value: FantasyCalc `redraftValue`.
+  function baseValue(pid) {
+    const key = String(pid);
+    if (baseCache[key] !== undefined) return baseCache[key];
+    const f = fc.byId[key];
+    const v = f ? f.redraft : dynValue(key);
+    baseCache[key] = v;
+    return v;
   }
 
-  return { sf, rank, baseValue, dynValue, startable, posRank: pid => rank[String(pid)] || null };
+  function posRankOf(pid) {
+    const f = fc.byId[String(pid)];
+    if (f && f.posRank) return f.posRank;
+    return fbRank[String(pid)] || null;
+  }
+
+  function startable(pid) {
+    const p = state.players[String(pid)];
+    if (!p) return false;
+    const r = posRankOf(pid);
+    return !!(r && STARTABLE_DEPTH[p.position] && r <= STARTABLE_DEPTH[p.position]);
+  }
+
+  return { sf, baseValue, dynValue, startable, posRank: posRankOf };
 }
 
-function pickValueFor(season, round, overall, teams) {
-  const n = teams || 12;
-  const slot = overall ? overall : (round - 1) * n + Math.ceil(n / 2);
-  const v = 6000 * Math.exp(-(slot - 1) / 9);
-  const seasonsOut = Math.max(0, Number(season) - Number((state.league && state.league.season) || season));
-  return v * Math.pow(0.80, seasonsOut);
+const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th' };
+
+// Maps one owned pick to a FantasyCalc pick value: exact slot when the rookie order is
+// known, otherwise the tiered/generic value for that year and round.
+function fcPickValue(year, round, overall, numTeams) {
+  const picks = (state.fc && state.fc.picks) || {};
+  const nt = numTeams || 12;
+  const ord = ROUND_ORD[round];
+
+  if (ord) {
+    if (overall) {
+      const slot = overall - (round - 1) * nt;
+      if (slot >= 1) {
+        const exact = picks[year + ' Pick ' + round + '.' + String(slot).padStart(2, '0')];
+        if (exact != null) return exact;
+      }
+    }
+
+    let tier = 'Mid';
+    if (overall) {
+      const frac = (overall - (round - 1) * nt) / nt;
+      tier = frac <= 1/3 ? 'Early' : (frac <= 2/3 ? 'Mid' : 'Late');
+    }
+
+    const tiered = picks[year + ' ' + ord + ' (' + tier + ')'];
+    if (tiered != null) return tiered;
+
+    const generic = picks[year + ' ' + ord];
+    if (generic != null) return generic;
+  }
+
+  // Rounds 5+ (or a year FantasyCalc doesn't list) — decay from that year's 4th.
+  const anchor = picks[year + ' 4th'] || picks['2029 4th'] || 300;
+  return anchor * Math.pow(0.4, Math.max(1, round - 4));
 }
 
 function coachPicks(rosterId) {
+  const nt = state.rosters.length || 12;
   return getAllOwnedPicks(rosterId).map(p => ({
     label: p.exactSlot ? (p.year + ' ' + p.exactSlot) : (p.year + ' R' + p.round),
     year: p.year,
     round: p.round,
     overall: p.overall,
-    value: pickValueFor(p.year, p.round, p.overall, state.rosters.length)
+    value: fcPickValue(p.year, p.round, p.overall, nt)
   })).sort((a,b) => b.value - a.value);
 }
 
@@ -1949,9 +2038,11 @@ function coachReport(rosterId) {
     </div>
 
     <div class="coach-sub">
-      Values are built from each player's rank within his own position, then re-weighted for
-      dynasty age curves, ${M.sf ? 'superflex QB premium' : 'single-QB scoring'} and
-      ${scoringLabel() || 'league'} scoring. Injury and roster status come from Sleeper.
+      Player and pick values are pulled live from FantasyCalc's dynasty trade market
+      (KeepTradeCut / DynastyCalc style), set for ${M.sf ? 'superflex' : '1-QB'},
+      ${league.teams ? Object.keys(league.teams).length : ''} teams and
+      ${scoringLabel() || 'league'} scoring. Contend/rebuild uses each side's win-now
+      vs dynasty values.
     </div>
   `;
 
@@ -2107,11 +2198,18 @@ function renderCoach(rosterId) {
 
   document.body.classList.add('modal-open');
 
-  // Let the spinner paint before the (synchronous) analysis runs.
-  setTimeout(() => {
+  // Load the FantasyCalc market (once), then run the analysis.
+  setTimeout(async () => {
     const body = document.getElementById('coachBody');
     if (!body) return;
     try {
+      const fc = await loadFantasyCalc();
+      if (fc && fc.ok === false) {
+        body.innerHTML = '<div class="error-msg">Couldn\'t reach FantasyCalc for live trade values (' +
+          fc.err + '). Try again in a moment.</div>';
+        return;
+      }
+      if (document.getElementById('coachBody') !== body) return;
       body.innerHTML = coachReport(rosterId);
     } catch(e) {
       body.innerHTML = '<div class="error-msg">Analysis failed: ' + e.message + '</div>';
@@ -2569,6 +2667,144 @@ async function loadTrending() {
         <div class="detail-title">Most Dropped</div>
         <div class="roster-list">${listHtml(state.trending.drop, 'tx-drop')}</div>
       </div>
+    </div>
+  `;
+}
+
+/* ---------- news (Sleeper player news) ---------- */
+
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderNews() {
+  if (state.newsTeam == null) state.newsTeam = defaultCoachRoster();
+  const rid = String(state.newsTeam);
+
+  const options = state.rosters
+    .map(r => String(r.roster_id))
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)))
+    .map(x => `<option value="${x}" ${x === rid ? 'selected' : ''}>${teamName(x)}</option>`)
+    .join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Player News</span>
+      <select class="year-select" onchange="selectNewsTeam(this.value)">${options}</select>
+    </div>
+    <div class="coach-sub">The latest Sleeper news for every player on this roster, newest first.</div>
+    <div id="newsArea">
+      <div class="status"><div class="spinner"></div><p>Loading player news...</p></div>
+    </div>
+  `;
+
+  loadNews(rid);
+}
+
+function selectNewsTeam(rid) {
+  state.newsTeam = String(rid);
+  renderNews();
+}
+
+async function loadNews(rid) {
+  const s = state;
+
+  if (!s.newsByTeam[rid]) {
+    const roster = s.rosters.find(r => String(r.roster_id) === String(rid));
+    let ids = ((roster && roster.players) || []).map(String)
+      .filter(pid => {
+        const p = s.players[pid];
+        return p && ['QB','RB','WR','TE','K'].indexOf(p.position) !== -1;
+      });
+
+    // Freshest news first, capped so a full roster stays a quick single round-trip.
+    ids.sort((a,b) => ((s.players[b] || {}).news_updated || 0) - ((s.players[a] || {}).news_updated || 0));
+    ids = ids.slice(0, 40);
+
+    const items = [];
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += 20) chunks.push(ids.slice(i, i + 20));
+
+    try {
+      const responses = await Promise.all(chunks.map(chunk => {
+        const q = 'query{' + chunk.map(pid =>
+          'n' + pid + ': get_player_news(sport:"nfl",player_id:"' + pid + '",limit:3)' +
+          '{metadata published source}'
+        ).join(' ') + '}';
+        return fetchGraphQL(q).catch(() => ({ data:{} }));
+      }));
+
+      const seen = {};
+      responses.forEach(res => {
+        const data = (res && res.data) || {};
+        Object.keys(data).forEach(alias => {
+          const pid = alias.slice(1);
+          (data[alias] || []).forEach(n => {
+            const md = n.metadata || {};
+            if (!md.title && !md.description) return;
+            const key = pid + '|' + (n.published || 0) + '|' + (md.title || '');
+            if (seen[key]) return;
+            seen[key] = 1;
+            items.push({
+              pid: pid,
+              title: md.title || '',
+              description: md.description || '',
+              analysis: md.analysis || '',
+              source: n.source || '',
+              published: n.published || 0
+            });
+          });
+        });
+      });
+
+      items.sort((a,b) => b.published - a.published);
+      s.newsByTeam[rid] = { items: items };
+    } catch (e) {
+      s.newsByTeam[rid] = { error: e.message, items: [] };
+    }
+  }
+
+  if (s !== state || state.activeTab !== 'news' || String(state.newsTeam) !== String(rid)) return;
+
+  const target = document.getElementById('newsArea');
+  if (!target) return;
+
+  const data = s.newsByTeam[rid];
+
+  if (data.error) {
+    target.innerHTML = '<div class="error-msg">Could not load news: ' + data.error + '</div>';
+    return;
+  }
+  if (!data.items.length) {
+    target.innerHTML = '<div class="empty">No recent Sleeper news for this roster.</div>';
+    return;
+  }
+
+  target.innerHTML = '<div class="list-stack">' + data.items.map(newsCardHtml).join('') + '</div>';
+}
+
+function newsDate(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+}
+
+function newsCardHtml(n) {
+  const p = state.players[String(n.pid)] || {};
+  const metaBits = [p.position, p.team, n.source, newsDate(n.published)].filter(Boolean);
+
+  return `
+    <div class="tx-card">
+      <div class="tx-top">
+        <span class="team-with-avatar"><b>${playerDisplayName(n.pid)}</b>${playerInjuryTag(n.pid)}</span>
+        <span class="tx-date">${escHtml(metaBits.join(' · '))}</span>
+      </div>
+      ${n.title ? `<div class="news-title">${escHtml(n.title)}</div>` : ''}
+      ${n.description ? `<div class="tx-line">${escHtml(n.description)}</div>` : ''}
+      ${n.analysis && n.analysis !== n.description ? `<div class="trade-why">${escHtml(n.analysis)}</div>` : ''}
     </div>
   `;
 }
