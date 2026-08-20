@@ -2221,22 +2221,9 @@ function ownerOfPlayer(pid) {
   return r ? String(r.roster_id) : '';
 }
 
-function tbEnsureInit(rosterId) {
-  if (state.tb && state.tb.teams.length >= 2) return;
-
-  const me = String(rosterId || defaultCoachRoster());
-  const others = state.rosters
-    .map(r => String(r.roster_id))
-    .filter(x => x !== me)
-    .sort((a,b) => teamName(a).localeCompare(teamName(b)));
-
-  state.tb = {
-    teams: [me, others[0]].filter(Boolean),
-    assets: [],
-    fromSel: me,
-    toSel: others[0] || '',
-    search: ''
-  };
+function tbEnsureInit() {
+  if (state.tb) return;
+  state.tb = { teams: [], assets: [], fromSel: '', toSel: '', search: '' };
 }
 
 function tbRender() {
@@ -2254,15 +2241,18 @@ function tbAddTeam(rid) {
   rid = String(rid);
   if (!rid) return;
   if (state.tb.teams.indexOf(rid) === -1) state.tb.teams.push(rid);
+  if (!state.tb.fromSel || state.tb.teams.indexOf(state.tb.fromSel) === -1) state.tb.fromSel = state.tb.teams[0];
+  if (!state.tb.toSel || state.tb.toSel === state.tb.fromSel || state.tb.teams.indexOf(state.tb.toSel) === -1) {
+    state.tb.toSel = state.tb.teams.find(t => t !== state.tb.fromSel) || '';
+  }
   tbRender();
 }
 
 function tbRemoveTeam(rid) {
   rid = String(rid);
-  if (state.tb.teams.length <= 2) return;
   state.tb.teams = state.tb.teams.filter(t => t !== rid);
   state.tb.assets = state.tb.assets.filter(a => a.to !== rid && a.from !== rid);
-  if (state.tb.fromSel === rid) state.tb.fromSel = state.tb.teams[0];
+  if (state.tb.fromSel === rid) state.tb.fromSel = state.tb.teams[0] || '';
   if (state.tb.toSel === rid) state.tb.toSel = state.tb.teams.find(t => t !== state.tb.fromSel) || '';
   tbRender();
 }
@@ -2313,15 +2303,21 @@ function tradeBuilderHtml() {
   let html = `<div class="section-label" style="margin-top:0;">Trade Builder</div>`;
   html += `<div class="tb-teams">`;
   parts.forEach(t => {
-    html += `<span class="tb-chip">${teamName(t)}${parts.length > 2 ? ` <button title="Remove team" onclick="tbRemoveTeam('${t}')">&times;</button>` : ''}</span>`;
+    html += `<span class="tb-chip">${teamName(t)} <button title="Remove team" onclick="tbRemoveTeam('${t}')">&times;</button></span>`;
   });
   if (notIn.length) {
     html += `<select class="tb-addteam" onchange="if(this.value)tbAddTeam(this.value)">
-      <option value="">+ Add team</option>
+      <option value="">${parts.length ? '+ Add team' : '+ Choose a team'}</option>
       ${notIn.map(t => `<option value="${t}">${teamName(t)}</option>`).join('')}
     </select>`;
   }
   html += `</div>`;
+
+  // Nothing to trade until at least two teams are chosen.
+  if (parts.length < 2) {
+    html += `<div class="tb-verdict close">Pick the teams making this trade — add ${parts.length ? 'one more team' : 'two or more teams'} to start. You can build 2-team or multi-team deals.</div>`;
+    return html;
+  }
 
   // Verdict
   if (tb.assets.length) {
@@ -2552,13 +2548,7 @@ async function openCoach() {
     return;
   }
 
-  if (!state.coachUnlocked) {
-    const pass = prompt('Enter passcode:');
-    if (pass === null) return;
-    if (pass !== NOTE_PASSCODE) { alert('Incorrect passcode.'); return; }
-    state.coachUnlocked = true;
-  }
-
+  // Trade Calc / analyzer is read-only, so it's open to everyone (no passcode).
   // Trending doubles as the free-agent news signal.
   if (!state.trending && !state.trendingLoading) await loadTrending();
 
@@ -3020,7 +3010,7 @@ function renderNews() {
       <span class="section-label" style="margin:0;">Player News</span>
       <select class="year-select" onchange="selectNewsTeam(this.value)">${options}</select>
     </div>
-    <div class="coach-sub">The latest Sleeper news for every player on this roster, newest first.</div>
+    <div class="coach-sub">The latest Sleeper news for every player on this roster, in lineup order (starters first).</div>
     <div id="newsArea">
       <div class="status"><div class="spinner"></div><p>Loading player news...</p></div>
     </div>
@@ -3039,15 +3029,36 @@ async function loadNews(rid) {
 
   if (!s.newsByTeam[rid]) {
     const roster = s.rosters.find(r => String(r.roster_id) === String(rid));
-    let ids = ((roster && roster.players) || []).map(String)
-      .filter(pid => {
-        const p = s.players[pid];
-        return p && ['QB','RB','WR','TE','K'].indexOf(p.position) !== -1;
-      });
 
-    // Freshest news first, capped so a full roster stays a quick single round-trip.
-    ids.sort((a,b) => ((s.players[b] || {}).news_updated || 0) - ((s.players[a] || {}).news_updated || 0));
-    ids = ids.slice(0, 40);
+    // Order players the way Sleeper shows the lineup: starters in slot order
+    // (QB, RB, RB, WR, ...), then the bench grouped by position.
+    const POS_PRI = { QB:0, RB:1, WR:2, TE:3, K:4, DEF:5 };
+    const eligible = pid => {
+      const p = s.players[pid];
+      return p && ['QB','RB','WR','TE','K'].indexOf(p.position) !== -1;
+    };
+
+    const ordered = [];
+    const seenPid = {};
+    ((roster && roster.starters) || []).map(String).forEach(pid => {
+      if (pid && pid !== '0' && !seenPid[pid] && eligible(pid)) { ordered.push(pid); seenPid[pid] = 1; }
+    });
+
+    const bench = ((roster && roster.players) || []).map(String)
+      .filter(pid => !seenPid[pid] && eligible(pid))
+      .sort((a,b) => {
+        const pa = s.players[a] || {}, pb = s.players[b] || {};
+        const pr = (POS_PRI[pa.position] == null ? 9 : POS_PRI[pa.position]) -
+                   (POS_PRI[pb.position] == null ? 9 : POS_PRI[pb.position]);
+        if (pr) return pr;
+        return (pb.news_updated || 0) - (pa.news_updated || 0);
+      });
+    bench.forEach(pid => { ordered.push(pid); seenPid[pid] = 1; });
+
+    const orderIdx = {};
+    ordered.forEach((pid, i) => orderIdx[pid] = i);
+
+    const ids = ordered.slice(0, 40);
 
     const items = [];
     const chunks = [];
@@ -3085,7 +3096,13 @@ async function loadNews(rid) {
         });
       });
 
-      items.sort((a,b) => b.published - a.published);
+      // Group by player in lineup order; each player's items stay newest-first.
+      items.sort((a,b) => {
+        const oa = orderIdx[a.pid] == null ? 999 : orderIdx[a.pid];
+        const ob = orderIdx[b.pid] == null ? 999 : orderIdx[b.pid];
+        if (oa !== ob) return oa - ob;
+        return b.published - a.published;
+      });
       s.newsByTeam[rid] = { items: items };
     } catch (e) {
       s.newsByTeam[rid] = { error: e.message, items: [] };
