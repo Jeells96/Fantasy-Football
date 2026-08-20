@@ -730,6 +730,45 @@ body.modal-open .coach-fab { display:none; }
   margin:2px 0 6px;
 }
 
+.coach-modes { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.mode-btn {
+  background:none; border:1px solid var(--border); color:var(--muted);
+  font-family:'DM Mono', monospace; font-size:.72rem; letter-spacing:1.5px;
+  text-transform:uppercase; padding:8px 16px; border-radius:999px; cursor:pointer;
+}
+.mode-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:600; }
+
+.tb-teams { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+.tb-chip {
+  display:inline-flex; align-items:center; gap:8px; background:var(--surface);
+  border:1px solid var(--border); border-radius:999px; padding:6px 8px 6px 12px;
+  font-family:'DM Mono', monospace; font-size:.78rem;
+}
+.tb-chip button { background:none; border:none; color:var(--danger); cursor:pointer; font-size:1rem; line-height:1; padding:0 2px; }
+.tb-addteam { background:var(--surface); border:1px dashed var(--border); border-radius:999px; color:var(--muted); font-family:'DM Mono', monospace; font-size:.75rem; padding:7px 12px; }
+
+.tb-board { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:20px; }
+@media (min-width:720px) { .tb-board.multi { grid-template-columns:repeat(2,1fr); } }
+
+.tb-side h3 { font-family:'Bebas Neue', sans-serif; letter-spacing:1.5px; color:var(--accent); font-size:1.25rem; margin-bottom:8px; }
+.tb-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:7px 9px; background:rgba(255,255,255,.03); border:1px solid rgba(30,39,64,.5); border-radius:6px; margin-bottom:6px; }
+.tb-row .tb-meta { font-family:'DM Mono', monospace; font-size:.68rem; color:var(--muted); }
+.tb-val { font-family:'DM Mono', monospace; font-size:.76rem; color:var(--accent); white-space:nowrap; }
+.tb-add-btn { background:none; border:1px solid var(--accent); color:var(--accent); border-radius:999px; padding:3px 11px; font-family:'DM Mono', monospace; font-size:.7rem; cursor:pointer; white-space:nowrap; }
+.tb-remove { background:none; border:none; color:var(--danger); cursor:pointer; font-size:1.1rem; line-height:1; }
+.tb-side-total { font-family:'DM Mono', monospace; font-size:.8rem; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); color:var(--muted); }
+.tb-net.pos { color:var(--green); }
+.tb-net.neg { color:var(--danger); }
+
+.tb-verdict { font-family:'DM Mono', monospace; font-size:.82rem; margin-bottom:16px; padding:12px 14px; border-radius:8px; border:1px solid var(--border); }
+.tb-verdict.fair { color:var(--green); border-color:rgba(74,232,160,.4); background:rgba(74,232,160,.08); }
+.tb-verdict.close { color:var(--accent); border-color:rgba(232,200,74,.4); background:rgba(232,200,74,.07); }
+.tb-verdict.off { color:var(--danger); border-color:rgba(232,74,106,.4); background:rgba(232,74,106,.07); }
+
+.tb-controls { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.tb-controls label { font-family:'DM Mono', monospace; font-size:.7rem; letter-spacing:1px; text-transform:uppercase; color:var(--muted); display:flex; flex-direction:column; gap:5px; }
+.tb-source-list { max-height:340px; overflow-y:auto; padding-right:2px; }
+
 .empty, .error-msg {
   background:var(--card);
   border:1px solid var(--border);
@@ -849,6 +888,8 @@ function freshState() {
     fc:null,
     newsTeam:null,
     newsByTeam:{},
+    tb:null,
+    coachMode:'analyze',
     activeTab:'board',
     notesUnlocked:false,
     coachUnlocked:false,
@@ -2173,7 +2214,280 @@ function coachReport(rosterId) {
   return html;
 }
 
-function renderCoach(rosterId) {
+/* ---------- coach: interactive trade builder ---------- */
+
+function ownerOfPlayer(pid) {
+  const r = state.rosters.find(x => (x.players || []).map(String).indexOf(String(pid)) !== -1);
+  return r ? String(r.roster_id) : '';
+}
+
+function tbEnsureInit(rosterId) {
+  if (state.tb && state.tb.teams.length >= 2) return;
+
+  const me = String(rosterId || defaultCoachRoster());
+  const others = state.rosters
+    .map(r => String(r.roster_id))
+    .filter(x => x !== me)
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)));
+
+  state.tb = {
+    teams: [me, others[0]].filter(Boolean),
+    assets: [],
+    fromSel: me,
+    toSel: others[0] || '',
+    search: ''
+  };
+}
+
+function tbRender() {
+  const body = document.getElementById('coachBody');
+  if (!body) return;
+  body.innerHTML = tradeBuilderHtml();
+
+  if (state.tb.fromSel === '__search__') {
+    const inp = document.getElementById('tbSearchInput');
+    if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
+  }
+}
+
+function tbAddTeam(rid) {
+  rid = String(rid);
+  if (!rid) return;
+  if (state.tb.teams.indexOf(rid) === -1) state.tb.teams.push(rid);
+  tbRender();
+}
+
+function tbRemoveTeam(rid) {
+  rid = String(rid);
+  if (state.tb.teams.length <= 2) return;
+  state.tb.teams = state.tb.teams.filter(t => t !== rid);
+  state.tb.assets = state.tb.assets.filter(a => a.to !== rid && a.from !== rid);
+  if (state.tb.fromSel === rid) state.tb.fromSel = state.tb.teams[0];
+  if (state.tb.toSel === rid) state.tb.toSel = state.tb.teams.find(t => t !== state.tb.fromSel) || '';
+  tbRender();
+}
+
+function tbSetFrom(v) {
+  state.tb.fromSel = v;
+  if (v !== '__search__' && state.tb.toSel === v) {
+    state.tb.toSel = state.tb.teams.find(t => t !== v) || '';
+  }
+  tbRender();
+}
+function tbSetTo(v) { state.tb.toSel = v; tbRender(); }
+function tbSetSearch(v) { state.tb.search = v; tbRender(); }
+
+function tbAddPlayer(pid, from, to) {
+  if (!to) { alert('Pick which team receives this player first.'); return; }
+  state.tb.assets.push({ kind:'player', pid:String(pid), from:String(from || ''), to:String(to) });
+  tbRender();
+}
+function tbAddPick(from, label, value, to) {
+  if (!to) { alert('Pick which team receives this pick first.'); return; }
+  state.tb.assets.push({ kind:'pick', label:label, value:Number(value) || 0, from:String(from), to:String(to) });
+  tbRender();
+}
+function tbRemoveAsset(i) { state.tb.assets.splice(i, 1); tbRender(); }
+function tbClear() { state.tb.assets = []; tbRender(); }
+
+function tradeBuilderHtml() {
+  const M = buildValueModel();
+  const tb = state.tb;
+  const parts = tb.teams;
+  const multi = parts.length > 2;
+
+  const assetVal = a => a.kind === 'pick' ? (a.value || 0) : M.dynValue(a.pid);
+  const fmt = v => Math.round(v).toLocaleString();
+
+  const recv = {}, give = {};
+  parts.forEach(t => { recv[t] = 0; give[t] = 0; });
+  tb.assets.forEach(a => {
+    if (recv[a.to] !== undefined) recv[a.to] += assetVal(a);
+    if (give[a.from] !== undefined) give[a.from] += assetVal(a);
+  });
+
+  // Participating teams + add-team control
+  const notIn = state.rosters.map(r => String(r.roster_id)).filter(t => parts.indexOf(t) === -1)
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)));
+
+  let html = `<div class="section-label" style="margin-top:0;">Trade Builder</div>`;
+  html += `<div class="tb-teams">`;
+  parts.forEach(t => {
+    html += `<span class="tb-chip">${teamName(t)}${parts.length > 2 ? ` <button title="Remove team" onclick="tbRemoveTeam('${t}')">&times;</button>` : ''}</span>`;
+  });
+  if (notIn.length) {
+    html += `<select class="tb-addteam" onchange="if(this.value)tbAddTeam(this.value)">
+      <option value="">+ Add team</option>
+      ${notIn.map(t => `<option value="${t}">${teamName(t)}</option>`).join('')}
+    </select>`;
+  }
+  html += `</div>`;
+
+  // Verdict
+  if (tb.assets.length) {
+    if (!multi) {
+      const a = parts[0], b = parts[1];
+      const hi = Math.max(recv[a], recv[b]), lo = Math.min(recv[a], recv[b]);
+      const pct = hi > 0 ? (hi - lo) / hi : 0;
+      const favor = recv[a] === recv[b] ? null : (recv[a] > recv[b] ? a : b);
+      const cls = pct <= 0.05 ? 'fair' : (pct <= 0.15 ? 'close' : 'off');
+      const msg = pct <= 0.05 ? 'Even trade'
+        : (pct <= 0.15 ? 'Fairly close' : 'Lopsided') +
+          (favor ? ' — favors ' + teamName(favor) : '');
+      html += `<div class="tb-verdict ${cls}">${msg} · ${teamName(a)} gets ${fmt(recv[a])} vs ${teamName(b)} gets ${fmt(recv[b])} (${Math.round(pct*100)}% apart)</div>`;
+    } else {
+      const nets = parts.map(t => recv[t] - give[t]);
+      const spread = Math.max.apply(null, nets) - Math.min.apply(null, nets);
+      const vol = parts.reduce((s,t) => s + recv[t], 0) || 1;
+      const pct = spread / vol;
+      const cls = pct <= 0.05 ? 'fair' : (pct <= 0.15 ? 'close' : 'off');
+      const label = pct <= 0.05 ? 'Balanced for everyone' : (pct <= 0.15 ? 'Close to balanced' : 'Uneven — some teams win more');
+      html += `<div class="tb-verdict ${cls}">${label} · net swing ${fmt(spread)} across ${parts.length} teams. Each team\'s net is shown below.</div>`;
+    }
+  } else {
+    html += `<div class="tb-verdict close">Add players or picks below. In a ${multi ? 'multi-team' : 'two-team'} trade, choose who each asset goes to with the “To” selector.</div>`;
+  }
+
+  // Board: one card per team showing what it gets and gives
+  html += `<div class="tb-board ${multi ? 'multi' : ''}">`;
+  parts.forEach(t => {
+    const gets = tb.assets.map((a,i) => ({a,i})).filter(x => x.a.to === t);
+    const gives = tb.assets.map((a,i) => ({a,i})).filter(x => x.a.from === t);
+    const net = recv[t] - give[t];
+    const netCls = net > 1 ? 'pos' : (net < -1 ? 'neg' : '');
+
+    html += `<div class="trade-card tb-side">
+      <h3>${teamName(t)}</h3>
+      <div class="tb-meta" style="margin-bottom:6px;">Receives</div>`;
+
+    if (gets.length) {
+      gets.forEach(x => {
+        html += `<div class="tb-row">
+          <span>${tbAssetName(x.a, M)}</span>
+          <span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" title="Remove" onclick="tbRemoveAsset(${x.i})">&times;</button></span>
+        </div>`;
+      });
+    } else {
+      html += `<div class="tb-meta" style="opacity:.7;margin-bottom:6px;">— nothing yet —</div>`;
+    }
+
+    if (gives.length) {
+      html += `<div class="tb-meta" style="margin:10px 0 6px;">Sends away</div>`;
+      gives.forEach(x => {
+        html += `<div class="tb-row" style="opacity:.75;">
+          <span>${tbAssetName(x.a, M)}</span>
+          <span class="tb-val">${fmt(assetVal(x.a))}</span>
+        </div>`;
+      });
+    }
+
+    html += `<div class="tb-side-total">Gets ${fmt(recv[t])} · Sends ${fmt(give[t])} · Net <span class="tb-net ${netCls}">${net >= 0 ? '+' : ''}${fmt(net)}</span></div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+
+  if (tb.assets.length) {
+    html += `<div style="margin-bottom:18px;"><button class="cancel-btn" onclick="tbClear()">Clear trade</button></div>`;
+  }
+
+  // Add-assets panel
+  const toOpts = parts.map(t => `<option value="${t}" ${t === tb.toSel ? 'selected' : ''}>${teamName(t)}</option>`).join('');
+  const fromOpts = parts.map(t => `<option value="${t}" ${t === tb.fromSel ? 'selected' : ''}>${teamName(t)}'s roster</option>`).join('')
+    + `<option value="__search__" ${tb.fromSel === '__search__' ? 'selected' : ''}>Search any player…</option>`;
+
+  html += `<div class="detail-title">Add players / picks</div>`;
+  html += `<div class="detail-box">
+    <div class="tb-controls">
+      <label>To (receives)<select class="year-select" onchange="tbSetTo(this.value)">${toOpts}</select></label>
+      <label>From<select class="year-select" onchange="tbSetFrom(this.value)">${fromOpts}</select></label>
+    </div>
+    <div class="tb-source-list">${tbSourceListHtml(M)}</div>
+  </div>`;
+
+  return html;
+}
+
+function tbAssetName(a, M) {
+  if (a.kind === 'pick') {
+    return `<b>${a.label}</b> <span class="tb-meta">pick${a.from ? ' · from ' + teamName(a.from) : ''}</span>`;
+  }
+  const p = state.players[String(a.pid)] || {};
+  const meta = [p.position, p.team].filter(Boolean).join(' · ');
+  const fromTxt = a.from ? ' · from ' + teamName(a.from) : ' · FA';
+  return `<b>${playerDisplayName(a.pid)}</b>${playerInjuryTag(a.pid)} <span class="tb-meta">${meta}${fromTxt}</span>`;
+}
+
+function tbSourceListHtml(M) {
+  const tb = state.tb;
+  const fmt = v => Math.round(v).toLocaleString();
+  const to = tb.toSel;
+
+  if (tb.fromSel === '__search__') {
+    const q = (tb.search || '').trim().toLowerCase();
+    let rows = '';
+
+    if (q.length >= 2) {
+      const matches = Object.keys(state.players)
+        .filter(pid => {
+          const p = state.players[pid];
+          if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return false;
+          return String(p.full_name || '').toLowerCase().indexOf(q) !== -1;
+        })
+        .sort((a,b) => M.dynValue(b) - M.dynValue(a))
+        .slice(0, 25);
+
+      rows = matches.length ? matches.map(pid => {
+        const p = state.players[pid];
+        const owner = ownerOfPlayer(pid);
+        const meta = [p.position, p.team, owner ? teamName(owner) : 'FA'].filter(Boolean).join(' · ');
+        return `<div class="tb-row">
+          <span><b>${playerDisplayName(pid)}</b>${playerInjuryTag(pid)} <span class="tb-meta">${meta}</span></span>
+          <span><span class="tb-val">${fmt(M.dynValue(pid))}</span>
+          <button class="tb-add-btn" onclick="tbAddPlayer('${pid}','${owner}','${to}')">Add</button></span>
+        </div>`;
+      }).join('') : `<div class="tb-meta">No matches.</div>`;
+    } else {
+      rows = `<div class="tb-meta">Type at least 2 letters to search every player.</div>`;
+    }
+
+    return `<input class="settings-input" id="tbSearchInput" placeholder="Search player name…"
+      value="${(tb.search || '').replace(/"/g,'&quot;')}" oninput="tbSetSearch(this.value)">${rows}`;
+  }
+
+  // A participating team's roster + owned picks
+  const rid = tb.fromSel;
+  const roster = state.rosters.find(r => String(r.roster_id) === String(rid));
+  const players = ((roster && roster.players) || []).map(String)
+    .filter(pid => { const p = state.players[pid]; return p && ['QB','RB','WR','TE','K','DEF'].indexOf(p.position) !== -1; })
+    .sort((a,b) => M.dynValue(b) - M.dynValue(a));
+
+  let rows = players.map(pid => {
+    const p = state.players[pid];
+    const meta = [p.position, p.team].filter(Boolean).join(' · ');
+    return `<div class="tb-row">
+      <span><b>${playerDisplayName(pid)}</b>${playerInjuryTag(pid)} <span class="tb-meta">${meta}</span></span>
+      <span><span class="tb-val">${fmt(M.dynValue(pid))}</span>
+      <button class="tb-add-btn" onclick="tbAddPlayer('${pid}','${rid}','${to}')">Add</button></span>
+    </div>`;
+  }).join('');
+
+  coachPicks(rid).forEach(pk => {
+    rows += `<div class="tb-row">
+      <span><b>${pk.label}</b> <span class="tb-meta">pick</span></span>
+      <span><span class="tb-val">${fmt(pk.value)}</span>
+      <button class="tb-add-btn" onclick="tbAddPick('${rid}','${pk.label}',${Math.round(pk.value)},'${to}')">Add</button></span>
+    </div>`;
+  });
+
+  return rows || `<div class="tb-meta">No assets on this roster.</div>`;
+}
+
+/* ---------- coach: modal shell ---------- */
+
+function renderCoach(rosterId, mode) {
+  mode = mode || 'analyze';
+  state.coachMode = mode;
+
   const root = document.getElementById('modalRoot');
   const options = state.rosters
     .map(r => String(r.roster_id))
@@ -2185,12 +2499,17 @@ function renderCoach(rosterId) {
     <div class="modal-overlay" onclick="if (event.target === this) closeTeamCard()">
       <div class="modal-card">
         <button class="back-btn" onclick="closeTeamCard()">&larr; Back</button>
-        <div class="year-selector">
-          <span class="section-label" style="margin:0;">Analyzing</span>
-          <select class="year-select" onchange="renderCoach(this.value)">${options}</select>
+        <div class="coach-modes">
+          <button class="mode-btn ${mode === 'analyze' ? 'active' : ''}" onclick="renderCoach('${rosterId}','analyze')">Team Analysis</button>
+          <button class="mode-btn ${mode === 'build' ? 'active' : ''}" onclick="renderCoach('${rosterId}','build')">Trade Builder</button>
         </div>
+        ${mode === 'analyze' ? `
+          <div class="year-selector">
+            <span class="section-label" style="margin:0;">Analyzing</span>
+            <select class="year-select" onchange="renderCoach(this.value,'analyze')">${options}</select>
+          </div>` : ''}
         <div id="coachBody">
-          <div class="status"><div class="spinner"></div><p>Crunching rosters...</p></div>
+          <div class="status"><div class="spinner"></div><p>Loading market values...</p></div>
         </div>
       </div>
     </div>
@@ -2198,7 +2517,7 @@ function renderCoach(rosterId) {
 
   document.body.classList.add('modal-open');
 
-  // Load the FantasyCalc market (once), then run the analysis.
+  // Load the FantasyCalc market (once), then render the chosen mode.
   setTimeout(async () => {
     const body = document.getElementById('coachBody');
     if (!body) return;
@@ -2210,7 +2529,12 @@ function renderCoach(rosterId) {
         return;
       }
       if (document.getElementById('coachBody') !== body) return;
-      body.innerHTML = coachReport(rosterId);
+      if (mode === 'build') {
+        tbEnsureInit(rosterId);
+        body.innerHTML = tradeBuilderHtml();
+      } else {
+        body.innerHTML = coachReport(rosterId);
+      }
     } catch(e) {
       body.innerHTML = '<div class="error-msg">Analysis failed: ' + e.message + '</div>';
     }
