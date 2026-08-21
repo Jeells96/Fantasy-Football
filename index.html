@@ -603,27 +603,6 @@ body.modal-open { overflow:hidden; }
   margin-bottom:10px;
 }
 
-.coach-fab {
-  position:fixed;
-  right:18px;
-  bottom:18px;
-  width:54px;
-  height:54px;
-  border-radius:50%;
-  background:var(--card);
-  border:1px solid var(--accent);
-  color:var(--accent);
-  font-size:1.5rem;
-  line-height:1;
-  cursor:pointer;
-  z-index:200;
-  box-shadow:0 6px 20px rgba(0,0,0,.5);
-}
-
-.coach-fab:hover { background:var(--surface); }
-
-body.modal-open .coach-fab { display:none; }
-
 .coach-sub {
   font-family:'DM Mono', monospace;
   font-size:.72rem;
@@ -730,6 +709,37 @@ body.modal-open .coach-fab { display:none; }
   margin:2px 0 6px;
 }
 
+.news-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+}
+.news-card summary {
+  cursor:pointer;
+  list-style:none;
+}
+.news-card summary::-webkit-details-marker { display:none; }
+.news-sum-top {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:baseline;
+  flex-wrap:wrap;
+}
+.news-headline {
+  color:var(--text);
+  font-weight:600;
+  margin-top:4px;
+}
+.news-card[open] .news-headline { display:none; }
+.news-body { margin-top:10px; }
+.news-story {
+  padding:10px 0;
+  border-top:1px solid var(--border);
+}
+.news-story:first-child { border-top:none; padding-top:4px; }
+
 .coach-modes { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
 .mode-btn {
   background:none; border:1px solid var(--border); color:var(--muted);
@@ -767,7 +777,51 @@ body.modal-open .coach-fab { display:none; }
 
 .tb-controls { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
 .tb-controls label { font-family:'DM Mono', monospace; font-size:.7rem; letter-spacing:1px; text-transform:uppercase; color:var(--muted); display:flex; flex-direction:column; gap:5px; }
-.tb-source-list { max-height:340px; overflow-y:auto; padding-right:2px; }
+
+/* evaluator (RESULT) */
+.tb-result { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:18px; }
+.tb-result-head { font-family:'DM Mono', monospace; font-size:.72rem; letter-spacing:2px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.tb-result-msg { text-transform:none; letter-spacing:0; font-family:'DM Sans',sans-serif; font-size:.9rem; color:var(--text); }
+.tb-grade { font-family:'Bebas Neue', sans-serif; font-size:1.35rem; letter-spacing:1px; line-height:1; }
+.tb-grade.g-a { color:var(--green); }
+.tb-grade.g-b { color:var(--accent2); }
+.tb-grade.g-c { color:var(--accent); }
+.tb-grade.g-d { color:var(--danger); }
+.tb-side { border-top:1px solid var(--border); padding-top:12px; margin-top:12px; }
+.tb-side:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+.tb-side-head { display:flex; align-items:center; gap:10px; font-family:'Bebas Neue',sans-serif; font-size:1.35rem; letter-spacing:1px; color:var(--accent); margin-bottom:8px; }
+.tb-side-head .tb-meta { margin-left:auto; }
+.tb-side-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:560px){ .tb-side-cols { grid-template-columns:1fr; } }
+.tb-colhead { display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:.72rem; margin-bottom:6px; }
+
+/* column selector */
+.tb-search-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; margin:10px 0 4px; }
+.tb-cols { display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; margin-top:12px; }
+.tb-col { flex:0 0 240px; background:rgba(0,0,0,.18); border:1px solid var(--border); border-radius:10px; padding:10px; }
+.tb-col-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.tb-col-body { display:flex; flex-direction:column; gap:7px; max-height:460px; overflow-y:auto; }
+.tb-pcard { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:pointer; }
+.tb-pcard:hover { border-color:var(--accent); }
+.tb-pcard.added { opacity:.5; cursor:default; }
+.tb-pcard.added:hover { border-color:var(--border); }
+.tb-pcard-top { display:flex; align-items:center; gap:4px; }
+.tb-pcard-name { font-weight:600; font-size:.9rem; margin-top:3px; }
+.pos-badge { font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:4px; padding:1px 5px; letter-spacing:.5px; }
+.pos-qb { background:rgba(232,74,106,.2); color:#e8607f; }
+.pos-rb { background:rgba(74,157,232,.2); color:var(--accent2); }
+.pos-wr { background:rgba(74,232,160,.2); color:var(--green); }
+.pos-te { background:rgba(232,160,74,.2); color:#e8a04a; }
+.pos-k, .pos-def { background:rgba(120,130,160,.2); color:var(--muted); }
+.pos-pick { background:rgba(180,120,232,.22); color:#b478e8; }
+
+/* trade history */
+.th-sides { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:8px 0; }
+@media (max-width:560px){ .th-sides { grid-template-columns:1fr; } }
+.th-side-name { font-weight:600; margin-bottom:6px; }
+.th-w { background:var(--green); color:#000; font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:3px; padding:1px 5px; }
+.th-foot { display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); margin-top:8px; padding-top:10px; }
+.th-foot .tb-add-btn { margin-left:auto; }
 
 .empty, .error-msg {
   background:var(--card);
@@ -796,10 +850,9 @@ body.modal-open .coach-fab { display:none; }
 
   <div class="tabs">
     <button class="tab active" data-tab="board" onclick="showTab('board')">Draft Board</button>
-    <button class="tab" data-tab="standings" onclick="showTab('standings')">Standings</button>
-    <button class="tab" data-tab="matchups" onclick="showTab('matchups')">Matchups</button>
+    <button class="tab" data-tab="standings" onclick="showTab('standings')">Draft Order</button>
     <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
-    <button class="tab" data-tab="trending" onclick="showTab('trending')">Trending</button>
+    <button class="tab" data-tab="coach" onclick="showTab('coach')">Trade Calc</button>
     <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
     <button class="tab" data-tab="settings" onclick="showTab('settings')">Settings</button>
@@ -812,8 +865,6 @@ body.modal-open .coach-fab { display:none; }
     <p>Fetching league data...</p>
   </div>
 </div>
-
-<button class="coach-fab" id="coachFab" title="Trade & roster analyzer" onclick="openCoach()">🏈</button>
 
 <div id="modalRoot"></div>
 
@@ -885,14 +936,18 @@ function freshState() {
     bracketsLoading:false,
     trending:null,
     trendingLoading:false,
-    fc:null,
+    vals:null,
+    tradeHistory:null,
+    tradeHistoryOpen:{},
+    draftOrder:null,
+    draftOrderLoading:false,
     newsTeam:null,
     newsByTeam:{},
     tb:null,
-    coachMode:'analyze',
+    coachMode:'build',
+    coachRoster:'',
     activeTab:'board',
     notesUnlocked:false,
-    coachUnlocked:false,
     editingNoteId:null,
     notes:[],
     settingsError:''
@@ -1040,10 +1095,9 @@ function showTab(tab) {
 
 function renderTab() {
   if (state.activeTab === 'notes') renderLeagueNotes();
-  else if (state.activeTab === 'standings') renderStandings();
-  else if (state.activeTab === 'matchups') renderMatchups();
+  else if (state.activeTab === 'standings') renderDraftOrder();
   else if (state.activeTab === 'activity') renderActivity();
-  else if (state.activeTab === 'trending') renderTrending();
+  else if (state.activeTab === 'coach') renderCoachTab();
   else if (state.activeTab === 'news') renderNews();
   else if (state.activeTab === 'settings') renderSettings();
   else renderDraftBoard();
@@ -1178,6 +1232,10 @@ function getAllOwnedPicks(rosterId) {
   state.availableYears.forEach(year => {
     const draftForYear = state.drafts.find(d => String(d.season) === String(year));
     const detail = state.draftDetails[String(year)];
+
+    // Once a draft is complete its picks have been used (they're players now),
+    // so they're no longer tradeable assets.
+    if (detail && detail.status === 'complete') return;
 
     let originalRosterIds = Object.keys(state.ownerMap).sort((a,b) => Number(a) - Number(b));
     let numRounds = leagueDraftRounds();
@@ -1530,58 +1588,115 @@ document.addEventListener('keydown', e => {
 
 /* ---------- coach: valuation model ---------- */
 
-// Player and pick values come from FantasyCalc's live dynasty market — the same style
-// of crowd-sourced trade values as KeepTradeCut / DynastyCalc — pulled per league for
-// superflex, team count and PPR. `value` is the dynasty price and `redraftValue` the
-// win-now price; we keep both so contenders and rebuilders weigh moves differently.
+// Player and pick values come from KeepTradeCut, via the DynastyProcess data feed —
+// crowd-sourced dynasty trade values. We read the 2-QB (superflex) column when the
+// league is superflex, otherwise the 1-QB column. These are the same numbers shown on
+// KeepTradeCut / FantasyCalc / DynastyCalc.
 const STARTABLE_DEPTH = { QB:16, RB:24, WR:24, TE:10 };
 
-// Tiny fallback so deep players FantasyCalc doesn't price still sort sensibly beneath
-// everyone who does have a market value.
+// Tiny fallback so deep players KTC doesn't price still sort sensibly beneath everyone
+// who does have a market value.
 const FALLBACK_PEAK = { QB:650, RB:750, WR:750, TE:450 };
 const INJURY_DISCOUNT = { IR:0.72, PUP:0.80, Out:0.80, NA:0.85, Sus:0.82, DNR:0.75, COV:0.95, Questionable:0.97 };
 
-// Fetches the current FantasyCalc dynasty values for this exact league shape and indexes
-// them by Sleeper player id, plus a map of rookie-pick label -> value.
-async function loadFantasyCalc() {
+// Older players help you win now more than their dynasty price implies (and young upside
+// is the reverse). A light tilt used only to split contenders from rebuilders.
+const WINNOW_AGE = {
+  QB: [[25,0.90],[30,1.0],[34,1.12],[99,1.20]],
+  RB: [[23,0.86],[26,1.0],[28,1.12],[99,1.22]],
+  WR: [[24,0.88],[28,1.0],[30,1.12],[99,1.20]],
+  TE: [[25,0.90],[30,1.0],[99,1.12]]
+};
+
+const VALUES_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
+
+function splitCsvLine(line) {
+  const out = [];
+  let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') { q = true; }
+    else if (ch === ',') { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const header = splitCsvLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i]) continue;
+    const cells = splitCsvLine(lines[i]);
+    const row = {};
+    header.forEach((h, j) => row[h] = cells[j]);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function ktcNameKey(name) {
+  return String(name || '').toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, '')
+    .replace(/[^a-z]/g, '');
+}
+
+// Loads KeepTradeCut dynasty values and indexes them by Sleeper player id (matched by
+// name+position against the already-loaded player DB), plus a pick-label -> value map.
+async function loadValues() {
   const s = state;
-  if (s.fc) return s.fc;
-
-  const numQbs = isSuperflex() ? 2 : 1;
-  const numTeams = s.rosters.length || 12;
-  const rec = s.league && s.league.scoring_settings && s.league.scoring_settings.rec;
-  const ppr = (rec == null ? 1 : rec);
-
-  const url = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=' +
-    numQbs + '&numTeams=' + numTeams + '&ppr=' + ppr;
+  if (s.vals) return s.vals;
 
   let rows;
   try {
-    rows = await fetchJSON(url);
+    const r = await fetch(VALUES_CSV);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    rows = parseCsv(await r.text());
   } catch (e) {
     const failed = { byId:{}, picks:{}, ok:false, err:e.message };
-    if (s === state) s.fc = failed;
+    if (s === state) s.vals = failed;
     return failed;
   }
 
+  const nameIdx = {};
+  Object.keys(s.players).forEach(pid => {
+    const p = s.players[pid];
+    if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return;
+    const k = ktcNameKey(p.full_name) + '|' + p.position;
+    if (!nameIdx[k] || (p.active && p.team)) nameIdx[k] = pid;
+  });
+
+  const sf = isSuperflex();
+  const col = sf ? 'value_2qb' : 'value_1qb';
   const byId = {};
   const picks = {};
 
-  (rows || []).forEach(row => {
-    const p = row.player || {};
-    if (p.position === 'PICK') { picks[p.name] = row.value || 0; return; }
-    if (!p.sleeperId) return;
-    byId[String(p.sleeperId)] = {
-      value: row.value || 0,
-      redraft: (row.redraftValue != null ? row.redraftValue : row.value) || 0,
-      posRank: row.positionRank || null,
-      overallRank: row.overallRank || null
-    };
+  rows.forEach(row => {
+    const val = Number(row[col]) || 0;
+    if (row.pos === 'PICK') { picks[row.player] = val; return; }
+    if (['QB','RB','WR','TE'].indexOf(row.pos) === -1) return;
+    const pid = nameIdx[ktcNameKey(row.player) + '|' + row.pos];
+    if (pid) byId[String(pid)] = { value: val, age: Number(row.age) || null };
   });
 
-  const fc = { byId:byId, picks:picks, ok:true, numTeams:numTeams };
-  if (s === state) s.fc = fc;
-  return fc;
+  const posLists = { QB:[], RB:[], WR:[], TE:[] };
+  Object.keys(byId).forEach(pid => {
+    const pos = (s.players[pid] || {}).position;
+    if (posLists[pos]) posLists[pos].push(pid);
+  });
+  Object.keys(posLists).forEach(pos => {
+    posLists[pos].sort((a,b) => byId[b].value - byId[a].value);
+    posLists[pos].forEach((pid, i) => byId[pid].posRank = i + 1);
+  });
+
+  const vals = { byId:byId, picks:picks, ok:true, sf:sf };
+  if (s === state) s.vals = vals;
+  return vals;
 }
 
 async function fetchGraphQL(query) {
@@ -1612,10 +1727,10 @@ function starterCounts() {
 
 function buildValueModel() {
   const sf = isSuperflex();
-  const fc = state.fc || { byId:{}, picks:{} };
+  const vals = state.vals || { byId:{}, picks:{} };
 
   // Fallback ordering (Sleeper search_rank within position) only affects deep players
-  // FantasyCalc doesn't price — real starters are always on its board.
+  // KTC doesn't price — real starters are always on its board.
   const byPos = { QB:[], RB:[], WR:[], TE:[] };
   Object.keys(state.players).forEach(pid => {
     const p = state.players[pid];
@@ -1636,13 +1751,20 @@ function buildValueModel() {
   const baseCache = {};
   const dynCache = {};
 
-  // Dynasty (long-term) value: FantasyCalc `value`, already age/market adjusted.
+  function winNowMult(pos, age) {
+    const curve = WINNOW_AGE[pos];
+    if (!curve || age == null) return 1;
+    for (let i = 0; i < curve.length; i++) if (age <= curve[i][0]) return curve[i][1];
+    return 1;
+  }
+
+  // Dynasty (long-term) value: the KTC market value.
   function dynValue(pid) {
     const key = String(pid);
     if (dynCache[key] !== undefined) return dynCache[key];
 
     let v = 0;
-    const f = fc.byId[key];
+    const f = vals.byId[key];
     if (f) {
       v = f.value;
     } else {
@@ -1656,18 +1778,20 @@ function buildValueModel() {
     return v;
   }
 
-  // Win-now value: FantasyCalc `redraftValue`.
+  // Win-now proxy: dynasty value tilted by age (KTC has no separate redraft column).
   function baseValue(pid) {
     const key = String(pid);
     if (baseCache[key] !== undefined) return baseCache[key];
-    const f = fc.byId[key];
-    const v = f ? f.redraft : dynValue(key);
+    const p = state.players[key] || {};
+    const f = vals.byId[key];
+    const age = f && f.age != null ? f.age : p.age;
+    const v = dynValue(key) * winNowMult(p.position, age);
     baseCache[key] = v;
     return v;
   }
 
   function posRankOf(pid) {
-    const f = fc.byId[String(pid)];
+    const f = vals.byId[String(pid)];
     if (f && f.posRank) return f.posRank;
     return fbRank[String(pid)] || null;
   }
@@ -1684,38 +1808,37 @@ function buildValueModel() {
 
 const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th' };
 
-// Maps one owned pick to a FantasyCalc pick value: exact slot when the rookie order is
-// known, otherwise the tiered/generic value for that year and round.
-function fcPickValue(year, round, overall, numTeams) {
-  const picks = (state.fc && state.fc.picks) || {};
+// Maps a pick to its KTC value: exact enumerated slot when the order is known (current
+// rookie class), otherwise the Early/Mid/Late tier, then the plain round value.
+function pickValue(year, round, overall, numTeams) {
+  const picks = (state.vals && state.vals.picks) || {};
   const nt = numTeams || 12;
   const ord = ROUND_ORD[round];
 
-  if (ord) {
-    if (overall) {
-      const slot = overall - (round - 1) * nt;
-      if (slot >= 1) {
-        const exact = picks[year + ' Pick ' + round + '.' + String(slot).padStart(2, '0')];
-        if (exact != null) return exact;
-      }
+  if (overall) {
+    const slot = overall - (round - 1) * nt;
+    if (slot >= 1) {
+      const exact = picks[year + ' Pick ' + round + '.' + String(slot).padStart(2, '0')];
+      if (exact != null) return exact;
     }
+  }
 
+  if (ord) {
     let tier = 'Mid';
     if (overall) {
       const frac = (overall - (round - 1) * nt) / nt;
       tier = frac <= 1/3 ? 'Early' : (frac <= 2/3 ? 'Mid' : 'Late');
     }
-
-    const tiered = picks[year + ' ' + ord + ' (' + tier + ')'];
+    const tiered = picks[year + ' ' + tier + ' ' + ord];
     if (tiered != null) return tiered;
 
     const generic = picks[year + ' ' + ord];
     if (generic != null) return generic;
   }
 
-  // Rounds 5+ (or a year FantasyCalc doesn't list) — decay from that year's 4th.
-  const anchor = picks[year + ' 4th'] || picks['2029 4th'] || 300;
-  return anchor * Math.pow(0.4, Math.max(1, round - 4));
+  // Rounds 5+ (or a year KTC doesn't list) — decay from that year's 4th.
+  const anchor = picks[year + ' 4th'] || picks['2028 4th'] || 20;
+  return anchor * Math.pow(0.5, Math.max(1, round - 4));
 }
 
 function coachPicks(rosterId) {
@@ -1725,7 +1848,7 @@ function coachPicks(rosterId) {
     year: p.year,
     round: p.round,
     overall: p.overall,
-    value: fcPickValue(p.year, p.round, p.overall, nt)
+    value: pickValue(p.year, p.round, p.overall, nt)
   })).sort((a,b) => b.value - a.value);
 }
 
@@ -2077,14 +2200,6 @@ function coachReport(rosterId) {
         </div>
       </div>
     </div>
-
-    <div class="coach-sub">
-      Player and pick values are pulled live from FantasyCalc's dynasty trade market
-      (KeepTradeCut / DynastyCalc style), set for ${M.sf ? 'superflex' : '1-QB'},
-      ${league.teams ? Object.keys(league.teams).length : ''} teams and
-      ${scoringLabel() || 'league'} scoring. Contend/rebuild uses each side's win-now
-      vs dynasty values.
-    </div>
   `;
 
   // Positional strength
@@ -2223,15 +2338,17 @@ function ownerOfPlayer(pid) {
 
 function tbEnsureInit() {
   if (state.tb) return;
-  state.tb = { teams: [], assets: [], fromSel: '', toSel: '', search: '' };
+  state.tb = { teams: [], assets: [], search: '', pending: null };
 }
 
 function tbRender() {
   const body = document.getElementById('coachBody');
   if (!body) return;
+
+  const searchFocused = document.activeElement && document.activeElement.id === 'tbSearchInput';
   body.innerHTML = tradeBuilderHtml();
 
-  if (state.tb.fromSel === '__search__') {
+  if (searchFocused) {
     const inp = document.getElementById('tbSearchInput');
     if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
   }
@@ -2241,10 +2358,7 @@ function tbAddTeam(rid) {
   rid = String(rid);
   if (!rid) return;
   if (state.tb.teams.indexOf(rid) === -1) state.tb.teams.push(rid);
-  if (!state.tb.fromSel || state.tb.teams.indexOf(state.tb.fromSel) === -1) state.tb.fromSel = state.tb.teams[0];
-  if (!state.tb.toSel || state.tb.toSel === state.tb.fromSel || state.tb.teams.indexOf(state.tb.toSel) === -1) {
-    state.tb.toSel = state.tb.teams.find(t => t !== state.tb.fromSel) || '';
-  }
+  state.tb.pending = null;
   tbRender();
 }
 
@@ -2252,33 +2366,79 @@ function tbRemoveTeam(rid) {
   rid = String(rid);
   state.tb.teams = state.tb.teams.filter(t => t !== rid);
   state.tb.assets = state.tb.assets.filter(a => a.to !== rid && a.from !== rid);
-  if (state.tb.fromSel === rid) state.tb.fromSel = state.tb.teams[0] || '';
-  if (state.tb.toSel === rid) state.tb.toSel = state.tb.teams.find(t => t !== state.tb.fromSel) || '';
+  state.tb.pending = null;
   tbRender();
 }
 
-function tbSetFrom(v) {
-  state.tb.fromSel = v;
-  if (v !== '__search__' && state.tb.toSel === v) {
-    state.tb.toSel = state.tb.teams.find(t => t !== v) || '';
-  }
-  tbRender();
-}
-function tbSetTo(v) { state.tb.toSel = v; tbRender(); }
 function tbSetSearch(v) { state.tb.search = v; tbRender(); }
 
+function tbHasPlayer(pid) {
+  return state.tb.assets.some(a => a.kind === 'player' && a.pid === String(pid));
+}
+function tbHasPick(from, label) {
+  return state.tb.assets.some(a => a.kind === 'pick' && a.from === String(from) && a.label === label);
+}
+
+// Clicking an asset: with two teams the destination is simply the other team; with three
+// or more we ask which team receives it (a player can't be added twice).
+function tbPickPlayer(pid, from) {
+  if (tbHasPlayer(pid)) return;
+  const parts = state.tb.teams;
+  if (parts.length === 2) tbAddPlayer(pid, from, parts.find(t => t !== from) || parts[0]);
+  else { state.tb.pending = { kind:'player', pid:String(pid), from:String(from) }; tbRender(); }
+}
+function tbPickPick(from, label, value) {
+  if (tbHasPick(from, label)) return;
+  const parts = state.tb.teams;
+  if (parts.length === 2) tbAddPick(from, label, value, parts.find(t => t !== from) || parts[0]);
+  else { state.tb.pending = { kind:'pick', from:String(from), label:label, value:Number(value) }; tbRender(); }
+}
+function tbChooseDest(to) {
+  const pd = state.tb.pending;
+  if (!pd) return;
+  state.tb.pending = null;
+  if (pd.kind === 'player') tbAddPlayer(pd.pid, pd.from, to);
+  else tbAddPick(pd.from, pd.label, pd.value, to);
+}
+function tbCancelPending() { state.tb.pending = null; tbRender(); }
+
 function tbAddPlayer(pid, from, to) {
-  if (!to) { alert('Pick which team receives this player first.'); return; }
+  if (!to || tbHasPlayer(pid)) { tbRender(); return; }
   state.tb.assets.push({ kind:'player', pid:String(pid), from:String(from || ''), to:String(to) });
   tbRender();
 }
 function tbAddPick(from, label, value, to) {
-  if (!to) { alert('Pick which team receives this pick first.'); return; }
+  if (!to || tbHasPick(from, label)) { tbRender(); return; }
   state.tb.assets.push({ kind:'pick', label:label, value:Number(value) || 0, from:String(from), to:String(to) });
   tbRender();
 }
 function tbRemoveAsset(i) { state.tb.assets.splice(i, 1); tbRender(); }
-function tbClear() { state.tb.assets = []; tbRender(); }
+function tbClear() { state.tb.assets = []; state.tb.pending = null; tbRender(); }
+
+const POS_ORDER = { QB:0, RB:1, WR:2, TE:3, K:4, DEF:5 };
+
+// Letter grade for one side, from how far short it came as a share of the larger package.
+// Calibrated to DynastyCalc: a ~22%-imbalanced deal grades B, ~13% grades B+, even is A+.
+function tbGrade(netPct) {
+  if (netPct >= -0.05) return 'A+';
+  if (netPct >= -0.15) return 'A';
+  if (netPct >= -0.27) return 'B+';
+  if (netPct >= -0.38) return 'B';
+  if (netPct >= -0.50) return 'C';
+  if (netPct >= -0.62) return 'D';
+  return 'F';
+}
+
+// "Won by" percentage, the way DynastyCalc shows it: gap over the combined value.
+function wonByPct(hi, lo) {
+  return (hi + lo) > 0 ? (hi - lo) / (hi + lo) : 0;
+}
+function tbGradeClass(g) {
+  if (g === 'A+' || g === 'A') return 'g-a';
+  if (g === 'B+' || g === 'B') return 'g-b';
+  if (g === 'C') return 'g-c';
+  return 'g-d';
+}
 
 function tradeBuilderHtml() {
   const M = buildValueModel();
@@ -2319,91 +2479,121 @@ function tradeBuilderHtml() {
     return html;
   }
 
-  // Verdict
-  if (tb.assets.length) {
-    if (!multi) {
-      const a = parts[0], b = parts[1];
-      const hi = Math.max(recv[a], recv[b]), lo = Math.min(recv[a], recv[b]);
-      const pct = hi > 0 ? (hi - lo) / hi : 0;
-      const favor = recv[a] === recv[b] ? null : (recv[a] > recv[b] ? a : b);
-      const cls = pct <= 0.05 ? 'fair' : (pct <= 0.15 ? 'close' : 'off');
-      const msg = pct <= 0.05 ? 'Even trade'
-        : (pct <= 0.15 ? 'Fairly close' : 'Lopsided') +
-          (favor ? ' — favors ' + teamName(favor) : '');
-      html += `<div class="tb-verdict ${cls}">${msg} · ${teamName(a)} gets ${fmt(recv[a])} vs ${teamName(b)} gets ${fmt(recv[b])} (${Math.round(pct*100)}% apart)</div>`;
-    } else {
-      const nets = parts.map(t => recv[t] - give[t]);
-      const spread = Math.max.apply(null, nets) - Math.min.apply(null, nets);
-      const vol = parts.reduce((s,t) => s + recv[t], 0) || 1;
-      const pct = spread / vol;
-      const cls = pct <= 0.05 ? 'fair' : (pct <= 0.15 ? 'close' : 'off');
-      const label = pct <= 0.05 ? 'Balanced for everyone' : (pct <= 0.15 ? 'Close to balanced' : 'Uneven — some teams win more');
-      html += `<div class="tb-verdict ${cls}">${label} · net swing ${fmt(spread)} across ${parts.length} teams. Each team\'s net is shown below.</div>`;
-    }
-  } else {
-    html += `<div class="tb-verdict close">Add players or picks below. In a ${multi ? 'multi-team' : 'two-team'} trade, choose who each asset goes to with the “To” selector.</div>`;
+  // Pending destination chooser (3+ team trades)
+  if (tb.pending) {
+    const label = tb.pending.kind === 'player' ? playerDisplayName(tb.pending.pid) : tb.pending.label;
+    html += `<div class="tb-verdict close"><b>Send ${escHtml(label)} to:</b> ` +
+      parts.filter(t => t !== tb.pending.from).map(t =>
+        `<button class="tb-add-btn" onclick="tbChooseDest('${t}')">${teamName(t)}</button>`).join(' ') +
+      ` <button class="tb-remove" onclick="tbCancelPending()" title="Cancel">&times;</button></div>`;
   }
 
-  // Board: one card per team showing what it gets and gives
-  html += `<div class="tb-board ${multi ? 'multi' : ''}">`;
-  parts.forEach(t => {
-    const gets = tb.assets.map((a,i) => ({a,i})).filter(x => x.a.to === t);
-    const gives = tb.assets.map((a,i) => ({a,i})).filter(x => x.a.from === t);
-    const net = recv[t] - give[t];
-    const netCls = net > 1 ? 'pos' : (net < -1 ? 'neg' : '');
+  // RESULT / evaluator
+  if (tb.assets.length) {
+    const sides = parts.map(t => {
+      const netPct = (recv[t] >= give[t])
+        ? (give[t] > 0 ? (recv[t] - give[t]) / Math.max(recv[t], give[t]) : (recv[t] > 0 ? 1 : 0))
+        : (recv[t] - give[t]) / Math.max(recv[t], give[t], 1);
+      const g = tbGrade(netPct);
+      const lab = Math.abs(netPct) < 0.05 ? 'Even' : (netPct > 0 ? 'Wins' : 'Overpays');
+      return { t: t, netPct: netPct, g: g, lab: lab };
+    });
+    const worst = Math.min.apply(null, sides.map(s => s.netPct));
+    const best = sides.slice().sort((a,b) => b.netPct - a.netPct)[0];
+    const totalsArr = parts.map(t => recv[t]);
+    const wonBy = wonByPct(Math.max.apply(null, totalsArr), Math.min.apply(null, totalsArr));
+    const overallGrade = tbGrade(worst);
+    const overallMsg = wonBy <= 0.05 ? 'All teams got a fair deal'
+      : teamName(best.t) + ' comes out ahead by ' + Math.round(wonBy * 100) + '%';
 
-    html += `<div class="trade-card tb-side">
-      <h3>${teamName(t)}</h3>
-      <div class="tb-meta" style="margin-bottom:6px;">Receives</div>`;
+    html += `<div class="tb-result">
+      <div class="tb-result-head">RESULT
+        <span class="tb-grade ${tbGradeClass(overallGrade)}">${overallGrade}</span>
+        <span class="tb-result-msg">${overallMsg}</span>
+      </div>`;
 
-    if (gets.length) {
-      gets.forEach(x => {
-        html += `<div class="tb-row">
-          <span>${tbAssetName(x.a, M)}</span>
-          <span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" title="Remove" onclick="tbRemoveAsset(${x.i})">&times;</button></span>
-        </div>`;
-      });
-    } else {
-      html += `<div class="tb-meta" style="opacity:.7;margin-bottom:6px;">— nothing yet —</div>`;
-    }
+    sides.forEach(s => {
+      const gets = tb.assets.map((a,i) => ({a:a,i:i})).filter(x => x.a.to === s.t);
+      const gives = tb.assets.map((a,i) => ({a:a,i:i})).filter(x => x.a.from === s.t);
+      html += `<div class="tb-side">
+        <div class="tb-side-head">${teamName(s.t)}
+          <span class="tb-grade ${tbGradeClass(s.g)}">${s.g}</span>
+          <span class="tb-meta">${s.lab}</span>
+        </div>
+        <div class="tb-side-cols">
+          <div class="tb-getcol">
+            <div class="tb-colhead"><span class="tx-add">Gets</span><span class="tb-val">${fmt(recv[s.t])}</span></div>
+            ${gets.length ? gets.map(x => `<div class="tb-row"><span>${tbAssetName(x.a)}</span><span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" onclick="tbRemoveAsset(${x.i})" title="Remove">&times;</button></span></div>`).join('') : '<div class="tb-meta">—</div>'}
+          </div>
+          <div class="tb-getcol">
+            <div class="tb-colhead"><span class="tx-drop">Sends</span><span class="tb-val">${fmt(give[s.t])}</span></div>
+            ${gives.length ? gives.map(x => `<div class="tb-row" style="opacity:.8"><span>${tbAssetName(x.a)}</span><span class="tb-val">${fmt(assetVal(x.a))}</span></div>`).join('') : '<div class="tb-meta">—</div>'}
+          </div>
+        </div>
+      </div>`;
+    });
 
-    if (gives.length) {
-      html += `<div class="tb-meta" style="margin:10px 0 6px;">Sends away</div>`;
-      gives.forEach(x => {
-        html += `<div class="tb-row" style="opacity:.75;">
-          <span>${tbAssetName(x.a, M)}</span>
-          <span class="tb-val">${fmt(assetVal(x.a))}</span>
-        </div>`;
-      });
-    }
-
-    html += `<div class="tb-side-total">Gets ${fmt(recv[t])} · Sends ${fmt(give[t])} · Net <span class="tb-net ${netCls}">${net >= 0 ? '+' : ''}${fmt(net)}</span></div>`;
+    html += `<div style="margin-top:12px;"><button class="cancel-btn" onclick="tbClear()">Clear trade</button></div>`;
     html += `</div>`;
+  }
+
+  // Selector: search + one column per team
+  html += `<div class="detail-title">Select players &amp; picks${multi ? " — you'll choose who receives each" : ''}</div>`;
+  html += `<input class="settings-input" id="tbSearchInput" placeholder="Search any player to add…" value="${escHtml(tb.search || '')}" oninput="tbSetSearch(this.value)">`;
+
+  const q = (tb.search || '').trim().toLowerCase();
+  if (q.length >= 2) {
+    const matches = Object.keys(state.players)
+      .filter(pid => { const p = state.players[pid]; return p && ['QB','RB','WR','TE'].indexOf(p.position) !== -1 && String(p.full_name||'').toLowerCase().indexOf(q) !== -1; })
+      .sort((a,b) => M.dynValue(b) - M.dynValue(a)).slice(0, 20);
+    html += `<div class="tb-search-results">` +
+      (matches.length ? matches.map(pid => tbCardHtml(pid, ownerOfPlayer(pid), M, tbHasPlayer(pid), true)).join('') : '<div class="tb-meta">No matches.</div>') +
+      `</div>`;
+  }
+
+  html += `<div class="tb-cols">`;
+  parts.forEach(t => {
+    const roster = state.rosters.find(r => String(r.roster_id) === String(t));
+    const rec = getTeamRecord(roster);
+    const players = ((roster && roster.players) || []).map(String)
+      .filter(pid => { const p = state.players[pid]; return p && ['QB','RB','WR','TE','K','DEF'].indexOf(p.position) !== -1; })
+      .sort((a,b) => (POS_ORDER[playerPositionOf(a)] == null ? 9 : POS_ORDER[playerPositionOf(a)]) -
+                     (POS_ORDER[playerPositionOf(b)] == null ? 9 : POS_ORDER[playerPositionOf(b)]) ||
+                     M.dynValue(b) - M.dynValue(a));
+
+    html += `<div class="tb-col">
+      <div class="tb-col-head">${avatarHtml(t, 24)}<div><b>${teamName(t)}</b><div class="tb-meta">${formatRecord(rec)}</div></div></div>
+      <div class="tb-col-body">`;
+    players.forEach(pid => { html += tbCardHtml(pid, t, M, tbHasPlayer(pid), false); });
+    coachPicks(t).forEach(pk => {
+      const added = tbHasPick(t, pk.label);
+      html += `<div class="tb-pcard ${added ? 'added' : ''}" ${added ? '' : `onclick="tbPickPick('${t}','${pk.label}',${Math.round(pk.value)})"`}>
+        <div class="tb-pcard-top"><span class="pos-badge pos-pick">PICK</span><span class="tb-val" style="margin-left:auto">${fmt(pk.value)}</span></div>
+        <div class="tb-pcard-name">${pk.label}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
   });
   html += `</div>`;
-
-  if (tb.assets.length) {
-    html += `<div style="margin-bottom:18px;"><button class="cancel-btn" onclick="tbClear()">Clear trade</button></div>`;
-  }
-
-  // Add-assets panel
-  const toOpts = parts.map(t => `<option value="${t}" ${t === tb.toSel ? 'selected' : ''}>${teamName(t)}</option>`).join('');
-  const fromOpts = parts.map(t => `<option value="${t}" ${t === tb.fromSel ? 'selected' : ''}>${teamName(t)}'s roster</option>`).join('')
-    + `<option value="__search__" ${tb.fromSel === '__search__' ? 'selected' : ''}>Search any player…</option>`;
-
-  html += `<div class="detail-title">Add players / picks</div>`;
-  html += `<div class="detail-box">
-    <div class="tb-controls">
-      <label>To (receives)<select class="year-select" onchange="tbSetTo(this.value)">${toOpts}</select></label>
-      <label>From<select class="year-select" onchange="tbSetFrom(this.value)">${fromOpts}</select></label>
-    </div>
-    <div class="tb-source-list">${tbSourceListHtml(M)}</div>
-  </div>`;
 
   return html;
 }
 
-function tbAssetName(a, M) {
+function tbCardHtml(pid, from, M, added, isSearch) {
+  const p = state.players[String(pid)] || {};
+  const pos = p.position || '';
+  const team = p.team || 'FA';
+  const owner = isSearch ? ownerOfPlayer(pid) : from;
+  const sub = isSearch ? (owner ? teamName(owner) : 'Free agent') : (p.age ? 'Age ' + p.age : '');
+  const click = added ? '' : `onclick="tbPickPlayer('${pid}','${owner}')"`;
+  return `<div class="tb-pcard ${added ? 'added' : ''}" ${click}>
+    <div class="tb-pcard-top"><span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span><span class="tb-meta"> ${team}</span><span class="tb-val" style="margin-left:auto">${Math.round(M.dynValue(pid)).toLocaleString()}</span></div>
+    <div class="tb-pcard-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
+    ${sub ? `<div class="tb-meta">${escHtml(sub)}</div>` : ''}
+  </div>`;
+}
+
+function tbAssetName(a) {
   if (a.kind === 'pick') {
     return `<b>${a.label}</b> <span class="tb-meta">pick${a.from ? ' · from ' + teamName(a.from) : ''}</span>`;
   }
@@ -2413,201 +2603,498 @@ function tbAssetName(a, M) {
   return `<b>${playerDisplayName(a.pid)}</b>${playerInjuryTag(a.pid)} <span class="tb-meta">${meta}${fromTxt}</span>`;
 }
 
-function tbSourceListHtml(M) {
-  const tb = state.tb;
-  const fmt = v => Math.round(v).toLocaleString();
-  const to = tb.toSel;
-
-  if (tb.fromSel === '__search__') {
-    const q = (tb.search || '').trim().toLowerCase();
-    let rows = '';
-
-    if (q.length >= 2) {
-      const matches = Object.keys(state.players)
-        .filter(pid => {
-          const p = state.players[pid];
-          if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return false;
-          return String(p.full_name || '').toLowerCase().indexOf(q) !== -1;
-        })
-        .sort((a,b) => M.dynValue(b) - M.dynValue(a))
-        .slice(0, 25);
-
-      rows = matches.length ? matches.map(pid => {
-        const p = state.players[pid];
-        const owner = ownerOfPlayer(pid);
-        const meta = [p.position, p.team, owner ? teamName(owner) : 'FA'].filter(Boolean).join(' · ');
-        return `<div class="tb-row">
-          <span><b>${playerDisplayName(pid)}</b>${playerInjuryTag(pid)} <span class="tb-meta">${meta}</span></span>
-          <span><span class="tb-val">${fmt(M.dynValue(pid))}</span>
-          <button class="tb-add-btn" onclick="tbAddPlayer('${pid}','${owner}','${to}')">Add</button></span>
-        </div>`;
-      }).join('') : `<div class="tb-meta">No matches.</div>`;
-    } else {
-      rows = `<div class="tb-meta">Type at least 2 letters to search every player.</div>`;
-    }
-
-    return `<input class="settings-input" id="tbSearchInput" placeholder="Search player name…"
-      value="${(tb.search || '').replace(/"/g,'&quot;')}" oninput="tbSetSearch(this.value)">${rows}`;
-  }
-
-  // A participating team's roster + owned picks
-  const rid = tb.fromSel;
-  const roster = state.rosters.find(r => String(r.roster_id) === String(rid));
-  const players = ((roster && roster.players) || []).map(String)
-    .filter(pid => { const p = state.players[pid]; return p && ['QB','RB','WR','TE','K','DEF'].indexOf(p.position) !== -1; })
-    .sort((a,b) => M.dynValue(b) - M.dynValue(a));
-
-  let rows = players.map(pid => {
-    const p = state.players[pid];
-    const meta = [p.position, p.team].filter(Boolean).join(' · ');
-    return `<div class="tb-row">
-      <span><b>${playerDisplayName(pid)}</b>${playerInjuryTag(pid)} <span class="tb-meta">${meta}</span></span>
-      <span><span class="tb-val">${fmt(M.dynValue(pid))}</span>
-      <button class="tb-add-btn" onclick="tbAddPlayer('${pid}','${rid}','${to}')">Add</button></span>
-    </div>`;
-  }).join('');
-
-  coachPicks(rid).forEach(pk => {
-    rows += `<div class="tb-row">
-      <span><b>${pk.label}</b> <span class="tb-meta">pick</span></span>
-      <span><span class="tb-val">${fmt(pk.value)}</span>
-      <button class="tb-add-btn" onclick="tbAddPick('${rid}','${pk.label}',${Math.round(pk.value)},'${to}')">Add</button></span>
-    </div>`;
-  });
-
-  return rows || `<div class="tb-meta">No assets on this roster.</div>`;
-}
-
 /* ---------- coach: modal shell ---------- */
-
-function renderCoach(rosterId, mode) {
-  mode = mode || 'analyze';
-  state.coachMode = mode;
-
-  const root = document.getElementById('modalRoot');
-  const options = state.rosters
-    .map(r => String(r.roster_id))
-    .sort((a,b) => teamName(a).localeCompare(teamName(b)))
-    .map(rid => `<option value="${rid}" ${rid === String(rosterId) ? 'selected' : ''}>${teamName(rid)}</option>`)
-    .join('');
-
-  root.innerHTML = `
-    <div class="modal-overlay" onclick="if (event.target === this) closeTeamCard()">
-      <div class="modal-card">
-        <button class="back-btn" onclick="closeTeamCard()">&larr; Back</button>
-        <div class="coach-modes">
-          <button class="mode-btn ${mode === 'analyze' ? 'active' : ''}" onclick="renderCoach('${rosterId}','analyze')">Team Analysis</button>
-          <button class="mode-btn ${mode === 'build' ? 'active' : ''}" onclick="renderCoach('${rosterId}','build')">Trade Builder</button>
-        </div>
-        ${mode === 'analyze' ? `
-          <div class="year-selector">
-            <span class="section-label" style="margin:0;">Analyzing</span>
-            <select class="year-select" onchange="renderCoach(this.value,'analyze')">${options}</select>
-          </div>` : ''}
-        <div id="coachBody">
-          <div class="status"><div class="spinner"></div><p>Loading market values...</p></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.classList.add('modal-open');
-
-  // Load the FantasyCalc market (once), then render the chosen mode.
-  setTimeout(async () => {
-    const body = document.getElementById('coachBody');
-    if (!body) return;
-    try {
-      const fc = await loadFantasyCalc();
-      if (fc && fc.ok === false) {
-        body.innerHTML = '<div class="error-msg">Couldn\'t reach FantasyCalc for live trade values (' +
-          fc.err + '). Try again in a moment.</div>';
-        return;
-      }
-      if (document.getElementById('coachBody') !== body) return;
-      if (mode === 'build') {
-        tbEnsureInit(rosterId);
-        body.innerHTML = tradeBuilderHtml();
-      } else {
-        body.innerHTML = coachReport(rosterId);
-      }
-    } catch(e) {
-      body.innerHTML = '<div class="error-msg">Analysis failed: ' + e.message + '</div>';
-    }
-  }, 30);
-}
 
 function defaultCoachRoster() {
   const mine = state.rosters.find(r => teamName(r.roster_id) === 'Jaren');
   return String(mine ? mine.roster_id : (state.rosters[0] ? state.rosters[0].roster_id : ''));
 }
 
-async function openCoach() {
+// The Trade Calc tab: a mode toggle (Trade Builder / Team Analysis / Trade History) over
+// a body that loads the KTC market once, then renders the chosen mode inline.
+function renderCoachTab(rosterId, mode) {
   if (!state.rosters.length) {
-    alert('League data is still loading.');
+    document.getElementById('mainContent').innerHTML =
+      '<div class="status"><div class="spinner"></div><p>Loading league...</p></div>';
     return;
   }
 
-  // Trade Calc / analyzer is read-only, so it's open to everyone (no passcode).
-  // Trending doubles as the free-agent news signal.
-  if (!state.trending && !state.trendingLoading) await loadTrending();
+  mode = mode || state.coachMode || 'build';
+  state.coachMode = mode;
+  if (rosterId !== undefined) state.coachRoster = (rosterId === '' ? '' : String(rosterId));
+  const sel = state.coachRoster || '';
 
-  renderCoach(defaultCoachRoster());
+  const options = '<option value="">Choose a team…</option>' + state.rosters
+    .map(r => String(r.roster_id))
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)))
+    .map(rid => `<option value="${rid}" ${rid === sel ? 'selected' : ''}>${teamName(rid)}</option>`)
+    .join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="coach-modes">
+      <button class="mode-btn ${mode === 'build' ? 'active' : ''}" onclick="renderCoachTab(undefined,'build')">Trade Builder</button>
+      <button class="mode-btn ${mode === 'analyze' ? 'active' : ''}" onclick="renderCoachTab(undefined,'analyze')">Team Analysis</button>
+      <button class="mode-btn ${mode === 'history' ? 'active' : ''}" onclick="renderCoachTab(undefined,'history')">Trade History</button>
+    </div>
+    ${mode === 'analyze' ? `
+      <div class="year-selector">
+        <span class="section-label" style="margin:0;">Analyze team</span>
+        <select class="year-select" onchange="renderCoachTab(this.value,'analyze')">${options}</select>
+      </div>` : ''}
+    <div id="coachBody">
+      <div class="status"><div class="spinner"></div><p>Loading market values...</p></div>
+    </div>
+  `;
+
+  // Load the KTC market (once), then render the chosen mode.
+  setTimeout(async () => {
+    const body = document.getElementById('coachBody');
+    if (!body) return;
+    try {
+      const v = await loadValues();
+      if (v && v.ok === false) {
+        body.innerHTML = '<div class="error-msg">Couldn\'t load live trade values (' +
+          v.err + '). Try again in a moment.</div>';
+        return;
+      }
+      if (state.activeTab !== 'coach' || document.getElementById('coachBody') !== body) return;
+
+      if (mode === 'build') {
+        tbEnsureInit();
+        body.innerHTML = tradeBuilderHtml();
+      } else if (mode === 'history') {
+        body.innerHTML = '<div class="status"><div class="spinner"></div><p>Loading trades from your league history…</p></div>';
+        await loadTradeHistory();
+        if (state.activeTab !== 'coach' || state.coachMode !== 'history') return;
+        body.innerHTML = tradeHistoryHtml();
+      } else {
+        if (!sel) {
+          body.innerHTML = '<div class="tb-verdict close">Pick a team above to see its roster analysis and suggested trades.</div>';
+          return;
+        }
+        // Team Analysis uses trending as its free-agent signal.
+        if (!state.trending && !state.trendingLoading) await loadTrending();
+        if (state.activeTab !== 'coach' || document.getElementById('coachBody') !== body) return;
+        body.innerHTML = coachReport(sel);
+      }
+    } catch(e) {
+      body.innerHTML = '<div class="error-msg">Something went wrong: ' + e.message + '</div>';
+    }
+  }, 30);
 }
 
-/* ---------- standings + playoff brackets ---------- */
+/* ---------- coach: trade history ---------- */
 
-function renderStandings() {
-  const teams = state.rosters.map(r => ({
-    rosterId: String(r.roster_id),
-    rec: getTeamRecord(r)
-  }));
+// Fetches completed trades across the whole dynasty chain (up to 3 seasons) plus the
+// draft results needed to resolve what each traded pick became.
+async function loadTradeHistory() {
+  const s = state;
+  if (s.tradeHistory) return s.tradeHistory;
 
-  const seasonStarted = teams.some(t =>
-    t.rec.wins || t.rec.losses || t.rec.ties || t.rec.pf
-  );
-
-  const winPct = rec => {
-    const games = rec.wins + rec.losses + rec.ties;
-    return games ? (rec.wins + rec.ties * 0.5) / games : 0;
-  };
-
-  teams.sort((a,b) => {
-    if (winPct(b.rec) !== winPct(a.rec)) return winPct(b.rec) - winPct(a.rec);
-    if (b.rec.wins !== a.rec.wins) return b.rec.wins - a.rec.wins;
-    if (b.rec.pf !== a.rec.pf) return b.rec.pf - a.rec.pf;
-    return Number(a.rosterId) - Number(b.rosterId);
-  });
-
-  const season = state.league && state.league.season ? state.league.season + ' ' : '';
-
-  let html = `<div class="section-label">${season}Standings</div>`;
-
-  if (!seasonStarted) {
-    html += `<div class="info-banner">Season hasn't started yet — records and points will fill in once games are played</div>`;
+  const chain = [];
+  let lid = s.leagueId, lg = s.league;
+  for (let i = 0; i < 3 && lid; i++) {
+    if (!lg) { try { lg = await fetchJSON(API + '/league/' + lid); } catch(e) { break; } }
+    chain.push(lg);
+    lid = lg.previous_league_id && lg.previous_league_id !== '0' ? lg.previous_league_id : null;
+    lg = null;
   }
 
-  html += `<div class="draft-board"><table class="board-table">`;
-  html += `<thead><tr><th>Rank</th><th>Team</th><th>Record</th><th>Points For</th><th>Points Against</th></tr></thead><tbody>`;
+  const nameByLeague = {};
+  const seasonDraft = {};
+  const trades = [];
+  const seen = {};
 
-  teams.forEach((t, index) => {
-    html += `
-      <tr>
-        <td class="pick-num">${index + 1}</td>
-        <td class="team-cell">${teamLink(t.rosterId, true)}</td>
-        <td>${formatRecord(t.rec)}</td>
-        <td>${t.rec.pf.toFixed(1)}</td>
-        <td>${t.rec.pa.toFixed(1)}</td>
-      </tr>
-    `;
+  await Promise.all(chain.map(async L => {
+    const lgId = L.league_id;
+    const [users, rosters, drafts] = await Promise.all([
+      fetchJSON(API + '/league/' + lgId + '/users').catch(() => []),
+      fetchJSON(API + '/league/' + lgId + '/rosters').catch(() => []),
+      fetchJSON(API + '/league/' + lgId + '/drafts').catch(() => [])
+    ]);
+
+    const ubyid = {};
+    (users || []).forEach(u => ubyid[u.user_id] = u);
+    const nm = {};
+    (rosters || []).forEach(r => {
+      const u = ubyid[r.owner_id];
+      const tn = getSleeperTeamName(u, r.roster_id);
+      nm[String(r.roster_id)] = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(tn)] || tn;
+    });
+    nameByLeague[lgId] = nm;
+
+    const d = (drafts || [])[0];
+    if (d && d.draft_id) {
+      try {
+        const detail = await fetchJSON(API + '/draft/' + d.draft_id);
+        const picks = await fetchJSON(API + '/draft/' + d.draft_id + '/picks').catch(() => []);
+        if (detail && detail.slot_to_roster_id) {
+          const slots = Object.keys(detail.slot_to_roster_id).map(Number).sort((a,b) => a - b);
+          const order = slots.map(x => String(detail.slot_to_roster_id[String(x)]));
+          const byOverall = {};
+          (picks || []).forEach(p => { if (p.pick_no) byOverall[p.pick_no] = p.player_id; });
+          seasonDraft[String(detail.season || L.season)] = {
+            order: order, picksByOverall: byOverall, type: detail.type, teams: order.length
+          };
+        }
+      } catch(e) {}
+    }
+
+    const weeks = [];
+    for (let w = 1; w <= 18; w++) weeks.push(w);
+    const txResults = await Promise.all(weeks.map(w =>
+      fetchJSON(API + '/league/' + lgId + '/transactions/' + w).catch(() => [])));
+    txResults.flat().forEach(t => {
+      if (!t || t.type !== 'trade' || t.status !== 'complete' || seen[t.transaction_id]) return;
+      seen[t.transaction_id] = 1;
+      trades.push({
+        id: t.transaction_id, leagueId: lgId, season: String(L.season),
+        date: t.status_updated || t.created || 0,
+        rosterIds: t.roster_ids || [], adds: t.adds || {}, drops: t.drops || {},
+        draft_picks: t.draft_picks || [],
+        waiver_budget: Array.isArray(t.waiver_budget) ? t.waiver_budget : []
+      });
+    });
+  }));
+
+  trades.sort((a,b) => b.date - a.date);
+  s.tradeHistory = { trades: trades, nameByLeague: nameByLeague, seasonDraft: seasonDraft };
+  return s.tradeHistory;
+}
+
+function histName(th, leagueId, rid) {
+  const nm = th.nameByLeague[leagueId];
+  return (nm && nm[String(rid)]) || teamName(rid);
+}
+
+// Resolve a traded pick to its draft slot + the player it became (if the draft is done).
+function resolveHistPick(th, season, round, origRoster) {
+  const sd = th.seasonDraft[String(season)];
+  if (!sd || !sd.order) return null;
+  const teams = sd.order.length;
+  let ord = sd.order;
+  if (sd.type !== 'linear' && Number(round) % 2 === 0) ord = ord.slice().reverse();
+  const idx = ord.indexOf(String(origRoster));
+  if (idx < 0) return null;
+  const overall = (Number(round) - 1) * teams + idx + 1;
+  return {
+    overall: overall,
+    slot: round + '.' + String(idx + 1).padStart(2, '0'),
+    teams: teams,
+    playerId: sd.picksByOverall[overall] || null
+  };
+}
+
+// Value of one side's incoming assets, with pick values shown as picks or (in became mode)
+// as the players they turned into.
+function histSide(tr, rid, th, becameMode, M) {
+  const items = [];
+
+  Object.keys(tr.adds).forEach(pid => {
+    if (String(tr.adds[pid]) !== String(rid)) return;
+    items.push({ label: playerDisplayName(pid), pos: playerPositionOf(pid), value: M.dynValue(pid) });
   });
 
+  tr.draft_picks.forEach(p => {
+    if (String(p.owner_id) !== String(rid)) return;
+    const res = resolveHistPick(th, p.season, p.round, p.roster_id);
+    const teams = res ? res.teams : (state.rosters.length || 12);
+    let label = res && res.slot ? (p.season + ' ' + res.slot) : (p.season + ' Round ' + p.round);
+    let pos = 'PICK';
+    let value = pickValue(p.season, p.round, res ? res.overall : null, teams);
+    if (becameMode && res && res.playerId) {
+      label = playerDisplayName(res.playerId);
+      pos = playerPositionOf(res.playerId);
+      value = M.dynValue(res.playerId);
+    }
+    items.push({ label: label, pos: pos, value: value });
+  });
+
+  (tr.waiver_budget || []).forEach(wb => {
+    if (String(wb.receiver) === String(rid)) items.push({ label: '$' + wb.amount + ' FAAB', pos: '', value: 0 });
+  });
+
+  return { items: items, total: items.reduce((s,x) => s + x.value, 0) };
+}
+
+// Value a side sends away (mirror of what others receive from it), for net/grade.
+function histSent(tr, rid, th, becameMode, M) {
+  let total = 0;
+  Object.keys(tr.drops).forEach(pid => {
+    if (String(tr.drops[pid]) === String(rid)) total += M.dynValue(pid);
+  });
+  tr.draft_picks.forEach(p => {
+    if (String(p.previous_owner_id) !== String(rid)) return;
+    const res = resolveHistPick(th, p.season, p.round, p.roster_id);
+    const teams = res ? res.teams : (state.rosters.length || 12);
+    total += (becameMode && res && res.playerId)
+      ? M.dynValue(res.playerId)
+      : pickValue(p.season, p.round, res ? res.overall : null, teams);
+  });
+  return total;
+}
+
+function tradeHistToggle(id) {
+  state.tradeHistoryOpen[id] = !state.tradeHistoryOpen[id];
+  const body = document.getElementById('coachBody');
+  if (body) body.innerHTML = tradeHistoryHtml();
+}
+
+function tradeHistoryHtml() {
+  const th = state.tradeHistory;
+  const M = buildValueModel();
+  const fmt = v => Math.round(v).toLocaleString();
+
+  if (!th || !th.trades.length) {
+    return '<div class="empty">No completed trades found in your league history.</div>';
+  }
+
+  let html = `<div class="section-label" style="margin-top:0;">Trade History</div>`;
+  html += `<div class="coach-sub">Every completed trade across your dynasty, graded with current KTC values (hindsight). For trades with picks, reveal what they became.</div>`;
+
+  let lastSeason = null;
+
+  th.trades.forEach(tr => {
+    if (tr.season !== lastSeason) {
+      html += `<div class="detail-title">${tr.season} Season</div>`;
+      lastSeason = tr.season;
+    }
+
+    const became = !!state.tradeHistoryOpen[tr.id];
+    const hasPicks = tr.draft_picks.some(p => {
+      const r = resolveHistPick(th, p.season, p.round, p.roster_id);
+      return r && r.playerId;
+    });
+
+    const sides = tr.rosterIds.map(rid => {
+      const got = histSide(tr, rid, th, became, M);
+      const sent = histSent(tr, rid, th, became, M);
+      return { rid: String(rid), got: got, net: got.total - sent };
+    });
+
+    const totals = sides.map(s => s.got.total);
+    const hi = Math.max.apply(null, totals), lo = Math.min.apply(null, totals);
+    const gradePct = hi > 0 ? (hi - lo) / hi : 0;   // grade input (short side vs larger)
+    const pct = wonByPct(hi, lo);                    // display "won by"
+    const winner = pct >= 0.05 ? sides.slice().sort((a,b) => b.net - a.net)[0] : null;
+    const grade = tbGrade(-gradePct);
+    const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
+
+    html += `<div class="tx-card">
+      <div class="tx-top">
+        <span class="tx-date">${date}${became ? ' <span class="tx-badge trade">what it became</span>' : ''}</span>
+        <span style="margin-left:auto">Grade: <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span></span>
+      </div>
+      <div class="th-sides">`;
+
+    sides.forEach(s => {
+      const win = winner && winner.rid === s.rid;
+      html += `<div class="th-side">
+        <div class="th-side-name">${histName(th, tr.leagueId, s.rid)}${win ? ' <span class="th-w">W</span>' : ''}</div>
+        ${s.got.items.map(it => `<div class="tb-row"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${escHtml(it.label)}</span><span class="tb-val">${fmt(it.value)}</span></div>`).join('') || '<div class="tb-meta">—</div>'}
+        <div class="tb-side-total">Total: ${fmt(s.got.total)}</div>
+      </div>`;
+    });
+
+    html += `</div>`;
+
+    const verdict = winner
+      ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(pct * 100)}%</span>`
+      : `<span class="tx-add">Even — fair deal</span>`;
+
+    html += `<div class="tx-line th-foot">${verdict}`;
+    if (hasPicks) {
+      html += `<button class="tb-add-btn" onclick="tradeHistToggle('${tr.id}')">${became ? '← Flip back' : 'See what picks became →'}</button>`;
+    }
+    html += `</div></div>`;
+  });
+
+  return html;
+}
+
+/* ---------- draft order tracker + playoff brackets ---------- */
+
+// Best possible score from a week's players_points, respecting the lineup slots.
+function bestBallPoints(playersPoints) {
+  const counts = starterCounts();
+  const rp = (state.league && state.league.roster_positions) || [];
+  const defN = rp.filter(x => x === 'DEF').length;
+  const kN = rp.filter(x => x === 'K').length;
+
+  const pool = {};
+  Object.keys(playersPoints || {}).forEach(pid => {
+    const pos = playerPositionOf(pid);
+    (pool[pos] = pool[pos] || []).push({ pid: pid, pts: playersPoints[pid] || 0 });
+  });
+  Object.keys(pool).forEach(k => pool[k].sort((a,b) => b.pts - a.pts));
+
+  const used = {};
+  let total = 0;
+  const take = pos => {
+    const arr = pool[pos] || [];
+    for (let i = 0; i < arr.length; i++) if (!used[arr[i].pid]) { used[arr[i].pid] = 1; total += arr[i].pts; return; }
+  };
+  const takeFlex = (kinds, n) => {
+    for (let i = 0; i < n; i++) {
+      let best = null;
+      kinds.forEach(pos => (pool[pos] || []).forEach(x => { if (!used[x.pid] && (!best || x.pts > best.pts)) best = x; }));
+      if (best) { used[best.pid] = 1; total += best.pts; }
+    }
+  };
+  ['QB','RB','WR','TE'].forEach(pos => { for (let i = 0; i < (counts[pos] || 0); i++) take(pos); });
+  takeFlex(['RB','WR','TE'], counts.FLEX || 0);
+  takeFlex(['QB','RB','WR','TE'], counts.SUPER_FLEX || 0);
+  for (let i = 0; i < defN; i++) take('DEF');
+  for (let i = 0; i < kN; i++) take('K');
+  return total;
+}
+
+async function loadDraftOrder() {
+  const s = state;
+  if (s.draftOrder || s.draftOrderLoading) return s.draftOrder;
+  s.draftOrderLoading = true;
+
+  const pstart = (s.league.settings && s.league.settings.playoff_week_start) || 15;
+  const regWeeks = [];
+  for (let w = 1; w < pstart; w++) regWeeks.push(w);
+  const playoffWeeks = [pstart, pstart + 1, pstart + 2];
+  const allWeeks = regWeeks.concat(playoffWeeks);
+
+  const results = await Promise.all(
+    allWeeks.map(w => fetchJSON(API + '/league/' + s.leagueId + '/matchups/' + w).catch(() => []))
+  );
+  const byWeek = {};
+  allWeeks.forEach((w, i) => byWeek[w] = results[i] || []);
+
+  const stats = {};
+  s.rosters.forEach(r => stats[String(r.roster_id)] = { actual: 0, possible: 0, weeks: 0 });
+
+  regWeeks.forEach(w => {
+    (byWeek[w] || []).forEach(m => {
+      if (!m || (m.points || 0) <= 0) return; // week not played for this team
+      const st = stats[String(m.roster_id)];
+      if (!st) return;
+      st.actual += m.points || 0;
+      st.possible += bestBallPoints(m.players_points || {});
+      st.weeks++;
+    });
+  });
+
+  if (!s.brackets) {
+    const [w, l] = await Promise.all([
+      fetchJSON(API + '/league/' + s.leagueId + '/winners_bracket').catch(() => []),
+      fetchJSON(API + '/league/' + s.leagueId + '/losers_bracket').catch(() => [])
+    ]);
+    s.brackets = { winners: w || [], losers: l || [] };
+  }
+
+  s.draftOrder = { stats: stats, byWeek: byWeek, regWeeks: regWeeks, pstart: pstart, winners: s.brackets.winners };
+  s.draftOrderLoading = false;
+  return s.draftOrder;
+}
+
+function renderDraftOrder() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="section-label">${state.league && state.league.season ? Number(state.league.season) + 1 : ''} Rookie Draft Order</div>
+    <div id="draftOrderArea"><div class="status"><div class="spinner"></div><p>Crunching points possible…</p></div></div>
+  `;
+  loadDraftOrder().then(() => {
+    if (state.activeTab !== 'standings') return;
+    const el = document.getElementById('draftOrderArea');
+    if (el) el.innerHTML = draftOrderHtml();
+  }).catch(e => {
+    const el = document.getElementById('draftOrderArea');
+    if (el) el.innerHTML = '<div class="error-msg">Could not load draft order: ' + e.message + '</div>';
+  });
+}
+
+function draftOrderHtml() {
+  const d = state.draftOrder;
+  const ids = state.rosters.map(r => String(r.roster_id));
+  const played = ids.reduce((n, id) => n + (d.stats[id] ? d.stats[id].weeks : 0), 0);
+
+  const rules = `<div class="coach-sub" style="margin-bottom:16px;">
+    Picks 1–4 go to the four non-playoff teams, worst <b>points&nbsp;possible</b> picking first.
+    Picks 5–8 go to the playoff teams by finish: champion picks last (8th), runner-up 7th, and the two
+    semifinal losers take 5th &amp; 6th by their points possible in the 3rd-place game.
+  </div>`;
+
+  if (!played) {
+    return rules + `<div class="info-banner">No games played yet for ${state.league.season}. Order and lineup efficiency fill in each week as scores post — it tracks your league's real points-possible tiebreakers.</div>`;
+  }
+
+  // playoff teams / finish from the winners bracket
+  const wb = d.winners || [];
+  const champMatch = wb.find(m => m.p === 1);
+  const champ = champMatch && champMatch.w ? String(champMatch.w) : null;
+  const runnerUp = champMatch && champ ? [champMatch.t1, champMatch.t2].map(String).find(x => x && x !== champ) : null;
+  const thirdMatch = wb.find(m => m.p === 3);
+  const round1 = wb.filter(m => (m.r || 1) === 1);
+  const playoffSet = {};
+  round1.forEach(m => { [m.t1, m.t2].forEach(x => { if (x) playoffSet[String(x)] = 1; }); });
+  const bracketDone = !!champ;
+
+  const possible = id => d.stats[id] ? d.stats[id].possible : 0;
+  const order = []; // [{rosterId, pick, basis}]
+
+  if (bracketDone) {
+    const nonPlayoff = ids.filter(id => !playoffSet[id]).sort((a,b) => possible(a) - possible(b));
+    nonPlayoff.forEach((id, i) => order.push({ id: id, pick: i + 1, basis: 'Missed playoffs · ' + possible(id).toFixed(0) + ' pts possible' }));
+
+    const semiLosers = Object.keys(playoffSet).filter(id => id !== champ && id !== runnerUp);
+    const thirdWeek = thirdMatch ? d.pstart + ((thirdMatch.r || 2) - 1) : null;
+    const ppThatWeek = id => {
+      const wk = thirdWeek && d.byWeek[thirdWeek];
+      const m = wk && wk.find(x => String(x.roster_id) === id);
+      return m ? bestBallPoints(m.players_points || {}) : possible(id);
+    };
+    semiLosers.sort((a,b) => ppThatWeek(a) - ppThatWeek(b));
+    semiLosers.forEach((id, i) => order.push({ id: id, pick: 5 + i, basis: '3rd-place game · ' + ppThatWeek(id).toFixed(0) + ' pts possible' }));
+    if (runnerUp) order.push({ id: runnerUp, pick: 7, basis: 'Runner-up' });
+    if (champ) order.push({ id: champ, pick: 8, basis: 'Champion' });
+  } else {
+    // Season in progress — project from points possible, worst first.
+    ids.slice().sort((a,b) => possible(a) - possible(b)).forEach((id, i) =>
+      order.push({ id: id, pick: i + 1, basis: possible(id).toFixed(0) + ' pts possible (projected)' }));
+  }
+
+  order.sort((a,b) => a.pick - b.pick);
+
+  let html = rules;
+  if (!bracketDone) html += `<div class="info-banner">Projected order — playoffs haven't finished, so this ranks everyone by points possible so far. Finish-based picks (5–8) lock in once the bracket completes.</div>`;
+
+  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Team</th><th>Basis</th></tr></thead><tbody>`;
+  order.forEach(o => {
+    html += `<tr>
+      <td class="pick-num">${o.pick}.01</td>
+      <td class="team-cell">${teamLink(o.id, true)}</td>
+      <td class="tb-meta">${o.basis}</td>
+    </tr>`;
+  });
   html += `</tbody></table></div>`;
-  html += `<div id="bracketSection"></div>`;
 
-  document.getElementById('mainContent').innerHTML = html;
+  // Lineup efficiency — who left the most points on the bench
+  const eff = ids.filter(id => d.stats[id] && d.stats[id].possible > 0).map(id => {
+    const st = d.stats[id];
+    return { id: id, actual: st.actual, possible: st.possible, left: st.possible - st.actual, pct: st.actual / st.possible };
+  }).sort((a,b) => b.left - a.left);
 
-  loadBrackets();
+  if (eff.length) {
+    html += `<div class="section-label">Lineup Efficiency — points left on the bench</div>`;
+    html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Team</th><th>Scored</th><th>Possible</th><th>Left Out</th><th>Efficiency</th></tr></thead><tbody>`;
+    eff.forEach(e => {
+      html += `<tr>
+        <td class="team-cell">${teamLink(e.id, true)}</td>
+        <td>${e.actual.toFixed(1)}</td>
+        <td>${e.possible.toFixed(1)}</td>
+        <td class="tb-net neg">${e.left.toFixed(1)}</td>
+        <td>${(e.pct * 100).toFixed(1)}%</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  return html;
 }
 
 async function loadBrackets() {
@@ -3010,7 +3497,7 @@ function renderNews() {
       <span class="section-label" style="margin:0;">Player News</span>
       <select class="year-select" onchange="selectNewsTeam(this.value)">${options}</select>
     </div>
-    <div class="coach-sub">The latest Sleeper news for every player on this roster, in lineup order (starters first).</div>
+    <div class="coach-sub">Sleeper news in lineup order (starters first). Tap a player to expand older stories.</div>
     <div id="newsArea">
       <div class="status"><div class="spinner"></div><p>Loading player news...</p></div>
     </div>
@@ -3067,12 +3554,14 @@ async function loadNews(rid) {
     try {
       const responses = await Promise.all(chunks.map(chunk => {
         const q = 'query{' + chunk.map(pid =>
-          'n' + pid + ': get_player_news(sport:"nfl",player_id:"' + pid + '",limit:3)' +
+          'n' + pid + ': get_player_news(sport:"nfl",player_id:"' + pid + '",limit:5)' +
           '{metadata published source}'
         ).join(' ') + '}';
         return fetchGraphQL(q).catch(() => ({ data:{} }));
       }));
 
+      // Collect every story, grouped by player, newest first within each player.
+      const byPid = {};
       const seen = {};
       responses.forEach(res => {
         const data = (res && res.data) || {};
@@ -3084,8 +3573,7 @@ async function loadNews(rid) {
             const key = pid + '|' + (n.published || 0) + '|' + (md.title || '');
             if (seen[key]) return;
             seen[key] = 1;
-            items.push({
-              pid: pid,
+            (byPid[pid] = byPid[pid] || []).push({
               title: md.title || '',
               description: md.description || '',
               analysis: md.analysis || '',
@@ -3096,16 +3584,20 @@ async function loadNews(rid) {
         });
       });
 
-      // Group by player in lineup order; each player's items stay newest-first.
-      items.sort((a,b) => {
+      // One collapsible group per player, players in Sleeper lineup order.
+      const groups = Object.keys(byPid).map(pid => {
+        byPid[pid].sort((a,b) => b.published - a.published);
+        return { pid: pid, items: byPid[pid] };
+      });
+      groups.sort((a,b) => {
         const oa = orderIdx[a.pid] == null ? 999 : orderIdx[a.pid];
         const ob = orderIdx[b.pid] == null ? 999 : orderIdx[b.pid];
         if (oa !== ob) return oa - ob;
-        return b.published - a.published;
+        return (b.items[0].published || 0) - (a.items[0].published || 0);
       });
-      s.newsByTeam[rid] = { items: items };
+      s.newsByTeam[rid] = { groups: groups };
     } catch (e) {
-      s.newsByTeam[rid] = { error: e.message, items: [] };
+      s.newsByTeam[rid] = { error: e.message, groups: [] };
     }
   }
 
@@ -3120,12 +3612,12 @@ async function loadNews(rid) {
     target.innerHTML = '<div class="error-msg">Could not load news: ' + data.error + '</div>';
     return;
   }
-  if (!data.items.length) {
+  if (!data.groups || !data.groups.length) {
     target.innerHTML = '<div class="empty">No recent Sleeper news for this roster.</div>';
     return;
   }
 
-  target.innerHTML = '<div class="list-stack">' + data.items.map(newsCardHtml).join('') + '</div>';
+  target.innerHTML = '<div class="list-stack">' + data.groups.map(newsGroupHtml).join('') + '</div>';
 }
 
 function newsDate(ts) {
@@ -3133,20 +3625,34 @@ function newsDate(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
 }
 
-function newsCardHtml(n) {
-  const p = state.players[String(n.pid)] || {};
-  const metaBits = [p.position, p.team, n.source, newsDate(n.published)].filter(Boolean);
+// One player = one collapsed card showing the latest headline; expands to every story.
+function newsGroupHtml(g) {
+  const p = state.players[String(g.pid)] || {};
+  const posMeta = [p.position, p.team].filter(Boolean).join(' · ');
+  const latest = g.items[0];
+  const more = g.items.length - 1;
 
-  return `
-    <div class="tx-card">
-      <div class="tx-top">
-        <span class="team-with-avatar"><b>${playerDisplayName(n.pid)}</b>${playerInjuryTag(n.pid)}</span>
-        <span class="tx-date">${escHtml(metaBits.join(' · '))}</span>
-      </div>
+  const story = (n, i) => `
+    <div class="news-story">
+      <div class="tx-date">${escHtml([n.source, newsDate(n.published)].filter(Boolean).join(' · '))}</div>
       ${n.title ? `<div class="news-title">${escHtml(n.title)}</div>` : ''}
       ${n.description ? `<div class="tx-line">${escHtml(n.description)}</div>` : ''}
       ${n.analysis && n.analysis !== n.description ? `<div class="trade-why">${escHtml(n.analysis)}</div>` : ''}
     </div>
+  `;
+
+  return `
+    <details class="news-card">
+      <summary>
+        <div class="news-sum-top">
+          <span class="team-with-avatar"><b>${playerDisplayName(g.pid)}</b>${playerInjuryTag(g.pid)}
+            <span class="tx-date">${escHtml(posMeta)}</span></span>
+          <span class="tx-date">${escHtml(newsDate(latest.published))}${more > 0 ? ' · +' + more : ''}</span>
+        </div>
+        <div class="news-headline">${escHtml(latest.title || latest.description)}</div>
+      </summary>
+      <div class="news-body">${g.items.map(story).join('')}</div>
+    </details>
   `;
 }
 
@@ -3259,10 +3765,8 @@ function resetLeagueId() {
 
 function applyLeagueChange() {
   const notesUnlocked = state.notesUnlocked;
-  const coachUnlocked = state.coachUnlocked;
   state = freshState();
   state.notesUnlocked = notesUnlocked;
-  state.coachUnlocked = coachUnlocked;
   state.activeTab = 'board';
 
   document.querySelectorAll('.tab').forEach(button => {
