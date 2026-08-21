@@ -1601,13 +1601,12 @@ document.addEventListener('keydown', e => {
 
 /* ---------- coach: valuation model ---------- */
 
-// Player and pick values come from KeepTradeCut, via the DynastyProcess data feed —
-// crowd-sourced dynasty trade values. We read the 2-QB (superflex) column when the
-// league is superflex, otherwise the 1-QB column. These are the same numbers shown on
-// KeepTradeCut / FantasyCalc / DynastyCalc.
+// Player and pick values come straight from DynastyCalc's published rankings, read for
+// this league's team count and format (1QB / superflex) so ratings match dynastycalc.com
+// exactly.
 const STARTABLE_DEPTH = { QB:16, RB:24, WR:24, TE:10 };
 
-// Tiny fallback so deep players KTC doesn't price still sort sensibly beneath everyone
+// Tiny fallback so deep players DynastyCalc doesn't price still sort sensibly beneath everyone
 // who does have a market value.
 const FALLBACK_PEAK = { QB:650, RB:750, WR:750, TE:450 };
 const INJURY_DISCOUNT = { IR:0.72, PUP:0.80, Out:0.80, NA:0.85, Sus:0.82, DNR:0.75, COV:0.95, Questionable:0.97 };
@@ -1621,8 +1620,8 @@ const WINNOW_AGE = {
   TE: [[25,0.90],[30,1.0],[99,1.12]]
 };
 
-const VALUES_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
-const IDMAP_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv';
+const DC_RANKINGS_URL = 'https://www.dynastycalc.com/rankings';
+const DC_PICKS_URL = 'https://www.dynastycalc.com/draft-picks';
 
 // The original startup draft was run on ESPN and never imported into Sleeper, so it's
 // hard-coded here (team names mapped to current owners) as each player's true origin.
@@ -1832,65 +1831,68 @@ function ktcNameKey(name) {
     .replace(/[^a-z]/g, '');
 }
 
-// Loads KeepTradeCut dynasty values and indexes them by Sleeper player id. Players are
-// matched by an EXACT id join (FantasyPros id -> Sleeper id, via DynastyProcess's id map)
-// so every priced player maps correctly and stays correct as names change; a name match is
-// only a fallback for the handful of near-zero rows the id map misses.
+// DynastyCalc publishes team-count-specific values (1QB / superflex, plus TE-premium
+// variants) for both players and picks, keyed inside its rankings pages. We read them for
+// this league's size and format so ratings match exactly what dynastycalc.com shows.
+function dcTeamCountKey() {
+  const n = state.rosters.length || 12;
+  let best = 12, bd = 1e9;
+  [8, 10, 12, 14, 16].forEach(o => { const d = Math.abs(o - n); if (d < bd) { bd = d; best = o; } });
+  return String(best);
+}
+
 async function loadValues() {
   const s = state;
   if (s.vals) return s.vals;
 
-  let valRows, idText;
+  let rankText, pickText;
   try {
-    const [vr, ir] = await Promise.all([
-      fetch(VALUES_CSV).then(r => { if (!r.ok) throw new Error('values HTTP ' + r.status); return r.text(); }),
-      fetch(IDMAP_CSV).then(r => { if (!r.ok) throw new Error('idmap HTTP ' + r.status); return r.text(); })
+    const [a, b] = await Promise.all([
+      fetch(DC_RANKINGS_URL).then(r => { if (!r.ok) throw new Error('rankings HTTP ' + r.status); return r.text(); }),
+      fetch(DC_PICKS_URL).then(r => r.ok ? r.text() : '').catch(() => '')
     ]);
-    valRows = parseCsv(vr);
-    idText = ir;
+    rankText = a; pickText = b || '';
   } catch (e) {
     const failed = { byId:{}, picks:{}, ok:false, err:e.message };
     if (s === state) s.vals = failed;
     return failed;
   }
 
-  // FantasyPros id -> Sleeper id (exact, stable across seasons)
-  const fpToSleeper = {};
-  {
-    const lines = idText.split(/\r?\n/);
-    const header = splitCsvLine(lines[0]);
-    const fpIdx = header.indexOf('fantasypros_id');
-    const slIdx = header.indexOf('sleeper_id');
-    if (fpIdx !== -1 && slIdx !== -1) {
-      for (let i = 1; i < lines.length; i++) {
-        if (!lines[i]) continue;
-        const c = splitCsvLine(lines[i]);
-        if (c[fpIdx] && c[slIdx]) fpToSleeper[c[fpIdx]] = c[slIdx];
-      }
-    }
-  }
+  const tc = dcTeamCountKey();
+  const sf = isSuperflex();
+  const tePrem = !!(s.league && s.league.scoring_settings && s.league.scoring_settings.bonus_rec_te);
+  const valKey = tePrem ? (sf ? 'tepSf' : 'tep') : (sf ? 'superflex' : 'value');
 
-  // name+pos fallback for the few value rows the id map doesn't cover
+  // name+pos -> sleeper id (DynastyCalc has no ids, so we match on name)
   const nameIdx = {};
   Object.keys(s.players).forEach(pid => {
     const p = s.players[pid];
     if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return;
     const k = ktcNameKey(p.full_name) + '|' + p.position;
-    if (!nameIdx[k] || (p.active && p.team)) nameIdx[k] = pid;
+    if (!(k in nameIdx) || (p.active && p.team)) nameIdx[k] = pid;
   });
 
-  const sf = isSuperflex();
-  const col = sf ? 'value_2qb' : 'value_1qb';
   const byId = {};
   const picks = {};
 
-  valRows.forEach(row => {
-    const val = Number(row[col]) || 0;
-    if (row.pos === 'PICK') { picks[row.player] = val; return; }
-    if (['QB','RB','WR','TE'].indexOf(row.pos) === -1) return;
-    const pid = (row.fp_id && fpToSleeper[row.fp_id]) || nameIdx[ktcNameKey(row.player) + '|' + row.pos];
-    if (pid && s.players[pid]) byId[String(pid)] = { value: val, age: Number(row.age) || null };
-  });
+  // Player values from /rankings (unescape the flight payload, then extract each player's
+  // block for this league's team count).
+  const rt = rankText.replace(/\\"/g, '"');
+  const pre = new RegExp('"name":"((?:\\\\.|[^"\\\\])*)","position":"(QB|RB|WR|TE)","team":"[^"]*","age":(\\d+),"values":\\{[\\s\\S]*?"' + tc + '":\\{"value":(\\d+),"superflex":(\\d+),"tep":(\\d+),"tepSf":(\\d+)\\}', 'g');
+  let m;
+  while ((m = pre.exec(rt))) {
+    const vals = { value: +m[4], superflex: +m[5], tep: +m[6], tepSf: +m[7] };
+    const pid = nameIdx[ktcNameKey(m[1]) + '|' + m[2]];
+    if (pid && s.players[pid]) byId[String(pid)] = { value: vals[valKey] || vals.value, age: +m[3] || null };
+  }
+
+  // Pick values from /draft-picks, keyed by the DynastyCalc label (e.g. "2026 Mid 1st Round").
+  const pt = pickText.replace(/\\"/g, '"');
+  const pkre = new RegExp('"name":"((?:20\\d{2}) (?:Early|Mid|Late) \\d+(?:st|nd|rd|th) Round)"[\\s\\S]*?"' + tc + '":\\{"value":(\\d+),"superflex":(\\d+)', 'g');
+  let pm;
+  while ((pm = pkre.exec(pt))) {
+    picks[pm[1]] = sf ? (+pm[3]) : (+pm[2]);
+  }
 
   const posLists = { QB:[], RB:[], WR:[], TE:[] };
   Object.keys(byId).forEach(pid => {
@@ -1902,7 +1904,8 @@ async function loadValues() {
     posLists[pos].forEach((pid, i) => byId[pid].posRank = i + 1);
   });
 
-  const vals = { byId:byId, picks:picks, ok:true, sf:sf };
+  const vals = { byId:byId, picks:picks, ok: Object.keys(byId).length > 0, sf:sf };
+  if (!vals.ok) vals.err = 'no player values parsed';
   if (s === state) s.vals = vals;
   return vals;
 }
@@ -1938,7 +1941,7 @@ function buildValueModel() {
   const vals = state.vals || { byId:{}, picks:{} };
 
   // Fallback ordering (Sleeper search_rank within position) only affects deep players
-  // KTC doesn't price — real starters are always on its board.
+  // DynastyCalc doesn't price — real starters are always on its board.
   const byPos = { QB:[], RB:[], WR:[], TE:[] };
   Object.keys(state.players).forEach(pid => {
     const p = state.players[pid];
@@ -1966,7 +1969,7 @@ function buildValueModel() {
     return 1;
   }
 
-  // Dynasty (long-term) value: the KTC market value.
+  // Dynasty (long-term) value: the DynastyCalc market value.
   function dynValue(pid) {
     const key = String(pid);
     if (dynCache[key] !== undefined) return dynCache[key];
@@ -1986,7 +1989,7 @@ function buildValueModel() {
     return v;
   }
 
-  // Win-now proxy: dynasty value tilted by age (KTC has no separate redraft column).
+  // Win-now proxy: dynasty value tilted by age (there's no separate redraft column).
   function baseValue(pid) {
     const key = String(pid);
     if (baseCache[key] !== undefined) return baseCache[key];
@@ -2014,22 +2017,14 @@ function buildValueModel() {
   return { sf, baseValue, dynValue, startable, posRank: posRankOf };
 }
 
-const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th' };
+const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th' };
 
-// Maps a pick to its KTC value: exact enumerated slot when the order is known (current
-// rookie class), otherwise the Early/Mid/Late tier, then the plain round value.
+// Maps a pick to its DynastyCalc value using the "{year} {Early|Mid|Late} {ord} Round"
+// label — tier from where the pick falls in the round when the order is known.
 function pickValue(year, round, overall, numTeams) {
   const picks = (state.vals && state.vals.picks) || {};
   const nt = numTeams || 12;
   const ord = ROUND_ORD[round];
-
-  if (overall) {
-    const slot = overall - (round - 1) * nt;
-    if (slot >= 1) {
-      const exact = picks[year + ' Pick ' + round + '.' + String(slot).padStart(2, '0')];
-      if (exact != null) return exact;
-    }
-  }
 
   if (ord) {
     let tier = 'Mid';
@@ -2037,16 +2032,16 @@ function pickValue(year, round, overall, numTeams) {
       const frac = (overall - (round - 1) * nt) / nt;
       tier = frac <= 1/3 ? 'Early' : (frac <= 2/3 ? 'Mid' : 'Late');
     }
-    const tiered = picks[year + ' ' + tier + ' ' + ord];
-    if (tiered != null) return tiered;
+    const label = year + ' ' + tier + ' ' + ord + ' Round';
+    if (picks[label] != null) return picks[label];
 
-    const generic = picks[year + ' ' + ord];
-    if (generic != null) return generic;
+    const alt = ['Mid','Early','Late'].map(t => picks[year + ' ' + t + ' ' + ord + ' Round']).find(v => v != null);
+    if (alt != null) return alt;
   }
 
-  // Rounds 5+ (or a year KTC doesn't list) — decay from that year's 4th.
-  const anchor = picks[year + ' 4th'] || picks['2028 4th'] || 20;
-  return anchor * Math.pow(0.5, Math.max(1, round - 4));
+  // Rounds 6+ (or a year DynastyCalc doesn't list) — decay from that year's 5th.
+  const anchor = picks[year + ' Late 5th Round'] || picks['2029 Late 5th Round'] || picks[year + ' Late 4th Round'] || 150;
+  return anchor * Math.pow(0.6, Math.max(1, round - 5));
 }
 
 function coachPicks(rosterId) {
@@ -2819,7 +2814,7 @@ function defaultCoachRoster() {
 }
 
 // The Trade Calc tab: a mode toggle (Trade Builder / Team Analysis / Trade History) over
-// a body that loads the KTC market once, then renders the chosen mode inline.
+// a body that loads the DynastyCalc market once, then renders the chosen mode inline.
 function renderCoachTab(rosterId, mode) {
   if (!state.rosters.length) {
     document.getElementById('mainContent').innerHTML =
@@ -2854,7 +2849,7 @@ function renderCoachTab(rosterId, mode) {
     </div>
   `;
 
-  // Load the KTC market (once), then render the chosen mode.
+  // Load the DynastyCalc market (once), then render the chosen mode.
   setTimeout(async () => {
     const body = document.getElementById('coachBody');
     if (!body) return;
@@ -3073,7 +3068,7 @@ function tradeHistoryHtml() {
   }
 
   let html = `<div class="section-label" style="margin-top:0;">Trade History</div>`;
-  html += `<div class="coach-sub">Every completed trade across your dynasty, graded with current KTC values (hindsight). For trades with picks, reveal what they became.</div>`;
+  html += `<div class="coach-sub">Every completed trade across your dynasty, graded with current DynastyCalc values (hindsight). For trades with picks, reveal what they became.</div>`;
 
   let lastSeason = null;
 
@@ -3232,7 +3227,7 @@ function playerCardHtml(pid) {
       </div>
     </div>
     <div class="pc-rating">
-      <div><div class="pc-rating-num">${value}</div><div class="tb-meta">KTC value${p.position && rank ? ' · ' + p.position + rank : ''}</div></div>
+      <div><div class="pc-rating-num">${value}</div><div class="tb-meta">DynastyCalc value${p.position && rank ? ' · ' + p.position + rank : ''}</div></div>
     </div>
     <div class="detail-title">Fantasy Team History</div>
   `;
