@@ -823,6 +823,20 @@ body.modal-open { overflow:hidden; }
 .th-foot { display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); margin-top:8px; padding-top:10px; }
 .th-foot .tb-add-btn { margin-left:auto; }
 
+/* clickable player names + player card */
+.player-link { cursor:pointer; text-decoration:underline; text-decoration-color:rgba(232,200,74,.4); text-underline-offset:2px; }
+.player-link:hover { color:var(--accent); }
+.pc-head { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+.pc-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; background:var(--surface); border:1px solid var(--border); flex:none; }
+.pc-head h2 { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:1.5px; color:var(--accent); }
+.pc-rating { background:rgba(0,0,0,.2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:inline-block; }
+.pc-rating-num { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--green); line-height:1; }
+.pc-timeline { display:flex; flex-direction:column; }
+.pc-event { display:flex; gap:14px; padding:10px 0; border-top:1px solid var(--border); }
+.pc-event:first-child { border-top:none; }
+.pc-when { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--muted); width:110px; flex:none; }
+.pc-what { font-size:.9rem; }
+
 .empty, .error-msg {
   background:var(--card);
   border:1px solid var(--border);
@@ -1392,9 +1406,8 @@ function renderDraftBoard() {
 
         if (pick) {
           const md = pick.metadata || {};
-          const pname = (md.first_name && md.last_name)
-            ? md.first_name + ' ' + md.last_name
-            : playerDisplayName(pick.player_id);
+          const pname = pick.player_id ? pLink(pick.player_id)
+            : ((md.first_name || '') + ' ' + (md.last_name || '')).trim();
           const ppos = md.position || playerPositionOf(pick.player_id);
           html += `<td class="selection-cell">${pname}<span class="selection-pos">${ppos || ''}</span></td>`;
         } else {
@@ -1452,7 +1465,7 @@ function playerInjuryTag(playerId) {
 function playerRow(pid) {
   return `
     <div class="roster-row">
-      <span class="player-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}</span>
+      <span class="player-name">${pLink(pid)}${playerInjuryTag(pid)}</span>
       <span class="player-pos">${playerMeta(pid)}</span>
     </div>
   `;
@@ -1610,6 +1623,178 @@ const WINNOW_AGE = {
 
 const VALUES_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
 const IDMAP_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv';
+
+// The original startup draft was run on ESPN and never imported into Sleeper, so it's
+// hard-coded here (team names mapped to current owners) as each player's true origin.
+const STARTUP_DRAFT = [
+  {n:"Justin Jefferson",pos:"WR",r:1,p:1,t:"Dakota"},
+  {n:"CeeDee Lamb",pos:"WR",r:1,p:2,t:"Jaren"},
+  {n:"Christian McCaffrey",pos:"RB",r:1,p:3,t:"Ross"},
+  {n:"Josh Allen",pos:"QB",r:1,p:4,t:"Ryder"},
+  {n:"Breece Hall",pos:"RB",r:1,p:5,t:"Reese"},
+  {n:"Tyreek Hill",pos:"WR",r:1,p:6,t:"Dylan"},
+  {n:"Patrick Mahomes",pos:"QB",r:1,p:7,t:"Linn"},
+  {n:"Bijan Robinson",pos:"RB",r:1,p:8,t:"Duke"},
+  {n:"Amon-Ra St. Brown",pos:"WR",r:2,p:1,t:"Duke"},
+  {n:"Jonathan Taylor",pos:"RB",r:2,p:2,t:"Linn"},
+  {n:"Ja'Marr Chase",pos:"WR",r:2,p:3,t:"Dylan"},
+  {n:"A.J. Brown",pos:"WR",r:2,p:4,t:"Reese"},
+  {n:"Jalen Hurts",pos:"QB",r:2,p:5,t:"Ryder"},
+  {n:"Lamar Jackson",pos:"QB",r:2,p:6,t:"Ross"},
+  {n:"Puka Nacua",pos:"WR",r:2,p:7,t:"Jaren"},
+  {n:"Marvin Harrison Jr.",pos:"WR",r:2,p:8,t:"Dakota"},
+  {n:"Travis Etienne Jr.",pos:"RB",r:3,p:1,t:"Dakota"},
+  {n:"C.J. Stroud",pos:"QB",r:3,p:2,t:"Jaren"},
+  {n:"Anthony Richardson",pos:"QB",r:3,p:3,t:"Ross"},
+  {n:"Garrett Wilson",pos:"WR",r:3,p:4,t:"Ryder"},
+  {n:"Jahmyr Gibbs",pos:"RB",r:3,p:5,t:"Reese"},
+  {n:"Saquon Barkley",pos:"RB",r:3,p:6,t:"Dylan"},
+  {n:"Kyren Williams",pos:"RB",r:3,p:7,t:"Linn"},
+  {n:"Isiah Pacheco",pos:"RB",r:3,p:8,t:"Duke"},
+  {n:"Davante Adams",pos:"WR",r:4,p:1,t:"Duke"},
+  {n:"Drake London",pos:"WR",r:4,p:2,t:"Linn"},
+  {n:"Derrick Henry",pos:"RB",r:4,p:3,t:"Dylan"},
+  {n:"Malik Nabers",pos:"WR",r:4,p:4,t:"Reese"},
+  {n:"De'Von Achane",pos:"RB",r:4,p:5,t:"Ryder"},
+  {n:"Alvin Kamara",pos:"RB",r:4,p:6,t:"Ross"},
+  {n:"Nico Collins",pos:"WR",r:4,p:7,t:"Jaren"},
+  {n:"Joe Burrow",pos:"QB",r:4,p:8,t:"Dakota"},
+  {n:"Sam LaPorta",pos:"TE",r:5,p:1,t:"Dakota"},
+  {n:"Jaylen Waddle",pos:"WR",r:5,p:2,t:"Jaren"},
+  {n:"Chris Olave",pos:"WR",r:5,p:3,t:"Ross"},
+  {n:"James Cook",pos:"RB",r:5,p:4,t:"Ryder"},
+  {n:"Jordan Love",pos:"QB",r:5,p:5,t:"Reese"},
+  {n:"Mike Evans",pos:"WR",r:5,p:6,t:"Dylan"},
+  {n:"Michael Pittman Jr.",pos:"WR",r:5,p:7,t:"Linn"},
+  {n:"Travis Kelce",pos:"TE",r:5,p:8,t:"Duke"},
+  {n:"Dak Prescott",pos:"QB",r:6,p:1,t:"Duke"},
+  {n:"Rachaad White",pos:"RB",r:6,p:2,t:"Linn"},
+  {n:"Aaron Rodgers",pos:"QB",r:6,p:3,t:"Dylan"},
+  {n:"Justin Herbert",pos:"QB",r:6,p:4,t:"Reese"},
+  {n:"DK Metcalf",pos:"WR",r:6,p:5,t:"Ryder"},
+  {n:"Kyler Murray",pos:"QB",r:6,p:6,t:"Ross"},
+  {n:"Kenneth Walker III",pos:"RB",r:6,p:7,t:"Jaren"},
+  {n:"Brandon Aiyuk",pos:"WR",r:6,p:8,t:"Dakota"},
+  {n:"Joe Mixon",pos:"RB",r:7,p:1,t:"Dakota"},
+  {n:"Zamir White",pos:"RB",r:7,p:2,t:"Jaren"},
+  {n:"DeVonta Smith",pos:"WR",r:7,p:3,t:"Ross"},
+  {n:"Josh Jacobs",pos:"RB",r:7,p:4,t:"Ryder"},
+  {n:"Trey McBride",pos:"TE",r:7,p:5,t:"Reese"},
+  {n:"Evan Engram",pos:"TE",r:7,p:6,t:"Dylan"},
+  {n:"Cooper Kupp",pos:"WR",r:7,p:7,t:"Linn"},
+  {n:"Aaron Jones",pos:"RB",r:7,p:8,t:"Duke"},
+  {n:"Zay Flowers",pos:"WR",r:8,p:1,t:"Duke"},
+  {n:"Dalton Kincaid",pos:"TE",r:8,p:2,t:"Linn"},
+  {n:"Stefon Diggs",pos:"WR",r:8,p:3,t:"Dylan"},
+  {n:"Jayden Daniels",pos:"QB",r:8,p:4,t:"Reese"},
+  {n:"Kyle Pitts",pos:"TE",r:8,p:5,t:"Ryder"},
+  {n:"George Kittle",pos:"TE",r:8,p:6,t:"Ross"},
+  {n:"Caleb Williams",pos:"QB",r:8,p:7,t:"Jaren"},
+  {n:"Trevor Lawrence",pos:"QB",r:8,p:8,t:"Dakota"},
+  {n:"DJ Moore",pos:"WR",r:9,p:1,t:"Dakota"},
+  {n:"George Pickens",pos:"WR",r:9,p:2,t:"Jaren"},
+  {n:"Deebo Samuel Sr.",pos:"WR",r:9,p:3,t:"Ross"},
+  {n:"Tee Higgins",pos:"WR",r:9,p:4,t:"Ryder"},
+  {n:"Jaxon Smith-Njigba",pos:"WR",r:9,p:5,t:"Reese"},
+  {n:"Keenan Allen",pos:"WR",r:9,p:6,t:"Dylan"},
+  {n:"Calvin Ridley",pos:"WR",r:9,p:7,t:"Linn"},
+  {n:"D'Andre Swift",pos:"RB",r:9,p:8,t:"Duke"},
+  {n:"Tank Dell",pos:"WR",r:10,p:1,t:"Duke"},
+  {n:"Jerry Jeudy",pos:"WR",r:10,p:2,t:"Linn"},
+  {n:"David Montgomery",pos:"RB",r:10,p:3,t:"Dylan"},
+  {n:"Rome Odunze",pos:"WR",r:10,p:4,t:"Reese"},
+  {n:"Rhamondre Stevenson",pos:"RB",r:10,p:5,t:"Ryder"},
+  {n:"Jaylen Warren",pos:"RB",r:10,p:6,t:"Ross"},
+  {n:"Tony Pollard",pos:"RB",r:10,p:7,t:"Jaren"},
+  {n:"Brian Robinson Jr.",pos:"RB",r:10,p:8,t:"Dakota"},
+  {n:"Brock Bowers",pos:"TE",r:11,p:1,t:"Dakota"},
+  {n:"Jake Ferguson",pos:"TE",r:11,p:2,t:"Jaren"},
+  {n:"Chris Godwin",pos:"WR",r:11,p:3,t:"Ross"},
+  {n:"Jonathon Brooks",pos:"RB",r:11,p:4,t:"Ryder"},
+  {n:"Blake Corum",pos:"RB",r:11,p:5,t:"Reese"},
+  {n:"Mark Andrews",pos:"TE",r:11,p:6,t:"Dylan"},
+  {n:"Amari Cooper",pos:"WR",r:11,p:7,t:"Linn"},
+  {n:"James Conner",pos:"RB",r:11,p:8,t:"Duke"},
+  {n:"Xavier Worthy",pos:"WR",r:12,p:1,t:"Duke"},
+  {n:"Austin Ekeler",pos:"RB",r:12,p:2,t:"Linn"},
+  {n:"Keon Coleman",pos:"WR",r:12,p:3,t:"Dylan"},
+  {n:"Ladd McConkey",pos:"WR",r:12,p:4,t:"Reese"},
+  {n:"David Njoku",pos:"TE",r:12,p:5,t:"Ryder"},
+  {n:"Diontae Johnson",pos:"WR",r:12,p:6,t:"Ross"},
+  {n:"Raheem Mostert",pos:"RB",r:12,p:7,t:"Jaren"},
+  {n:"Jordan Addison",pos:"WR",r:12,p:8,t:"Dakota"},
+  {n:"Tyler Allgeier",pos:"RB",r:13,p:1,t:"Dakota"},
+  {n:"Rashee Rice",pos:"WR",r:13,p:2,t:"Jaren"},
+  {n:"Christian Kirk",pos:"WR",r:13,p:3,t:"Ross"},
+  {n:"Trey Benson",pos:"RB",r:13,p:4,t:"Ryder"},
+  {n:"Xavier Legette",pos:"WR",r:13,p:5,t:"Reese"},
+  {n:"Jayden Reed",pos:"WR",r:13,p:6,t:"Dylan"},
+  {n:"Deshaun Watson",pos:"QB",r:13,p:7,t:"Linn"},
+  {n:"Dallas Goedert",pos:"TE",r:13,p:8,t:"Duke"},
+  {n:"Courtland Sutton",pos:"WR",r:14,p:1,t:"Duke"},
+  {n:"Hollywood Brown",pos:"WR",r:14,p:2,t:"Linn"},
+  {n:"Najee Harris",pos:"RB",r:14,p:3,t:"Dylan"},
+  {n:"Hayden Hurst",pos:"TE",r:14,p:4,t:"Reese"},
+  {n:"Terry McLaurin",pos:"WR",r:14,p:5,t:"Ryder"},
+  {n:"Taysom Hill",pos:"TE",r:14,p:6,t:"Ross"},
+  {n:"Khalil Shakir",pos:"WR",r:14,p:7,t:"Jaren"},
+  {n:"Jameson Williams",pos:"WR",r:14,p:8,t:"Dakota"},
+  {n:"Tua Tagovailoa",pos:"QB",r:15,p:1,t:"Dakota"},
+  {n:"Brock Purdy",pos:"QB",r:15,p:2,t:"Jaren"},
+  {n:"Javonte Williams",pos:"RB",r:15,p:3,t:"Ross"},
+  {n:"Christian Watson",pos:"WR",r:15,p:4,t:"Ryder"},
+  {n:"Michael Wilson",pos:"WR",r:15,p:5,t:"Reese"},
+  {n:"Zack Moss",pos:"RB",r:15,p:7,t:"Linn"},
+  {n:"Nick Chubb",pos:"RB",r:15,p:8,t:"Duke"},
+  {n:"Cole Kmet",pos:"TE",r:16,p:1,t:"Duke"},
+  {n:"Ja'Lynn Polk",pos:"WR",r:16,p:2,t:"Linn"},
+  {n:"Tyjae Spears",pos:"RB",r:16,p:3,t:"Dylan"},
+  {n:"Wan'Dale Robinson",pos:"WR",r:16,p:4,t:"Reese"},
+  {n:"Jared Goff",pos:"QB",r:16,p:5,t:"Ryder"},
+  {n:"Baker Mayfield",pos:"QB",r:16,p:6,t:"Ross"},
+  {n:"T.J. Hockenson",pos:"TE",r:16,p:7,t:"Jaren"},
+  {n:"Bo Nix",pos:"QB",r:16,p:8,t:"Dakota"},
+  {n:"Ezekiel Elliott",pos:"RB",r:17,p:1,t:"Dakota"},
+  {n:"Zach Charbonnet",pos:"RB",r:17,p:2,t:"Jaren"},
+  {n:"DeAndre Hopkins",pos:"WR",r:17,p:3,t:"Ross"},
+  {n:"Brian Thomas Jr.",pos:"WR",r:17,p:4,t:"Ryder"},
+  {n:"Troy Franklin",pos:"WR",r:17,p:5,t:"Reese"},
+  {n:"Devin Singletary",pos:"RB",r:17,p:6,t:"Dylan"},
+  {n:"Gus Edwards",pos:"RB",r:17,p:7,t:"Linn"},
+  {n:"Kirk Cousins",pos:"QB",r:17,p:8,t:"Duke"},
+  {n:"Michael Penix Jr.",pos:"QB",r:18,p:1,t:"Duke"},
+  {n:"Will Levis",pos:"QB",r:18,p:2,t:"Linn"},
+  {n:"Jerome Ford",pos:"RB",r:18,p:3,t:"Dylan"},
+  {n:"Bucky Irving",pos:"RB",r:18,p:4,t:"Reese"},
+  {n:"Darnell Mooney",pos:"WR",r:18,p:5,t:"Ryder"},
+  {n:"Chase Brown",pos:"RB",r:18,p:7,t:"Jaren"},
+  {n:"MarShawn Lloyd",pos:"RB",r:18,p:8,t:"Dakota"},
+  {n:"Tyler Lockett",pos:"WR",r:19,p:3,t:"Ross"},
+  {n:"Mike Williams",pos:"WR",r:19,p:6,t:"Dylan"},
+];
+const STARTUP_ALIAS = { 'hollywoodbrown': 'marquisebrown' };
+let _startupByPid = null;
+
+// pid -> {r, p, t} for the ESPN startup, resolved once against the player DB by name+pos.
+function startupByPid() {
+  if (_startupByPid) return _startupByPid;
+  const idx = {};
+  Object.keys(state.players).forEach(pid => {
+    const p = state.players[pid];
+    if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return;
+    const k = ktcNameKey(p.full_name) + '|' + p.position;
+    if (!(k in idx)) idx[k] = pid;
+  });
+  const out = {};
+  STARTUP_DRAFT.forEach(e => {
+    let key = ktcNameKey(e.n);
+    if (STARTUP_ALIAS[key]) key = STARTUP_ALIAS[key];
+    const pid = idx[key + '|' + e.pos];
+    if (pid) out[pid] = { r: e.r, p: e.p, t: e.t };
+  });
+  _startupByPid = out;
+  return out;
+}
 
 function splitCsvLine(line) {
   const out = [];
@@ -2143,7 +2328,7 @@ function assetLabel(pid, M) {
   const p = state.players[String(pid)] || {};
   const bits = [p.position, p.team, p.age ? 'age ' + p.age : ''].filter(Boolean).join(' · ');
   const r = M.posRank(pid);
-  return `<b>${playerDisplayName(pid)}</b> <span class="player-pos">${bits}${r ? ' · ' + p.position + r : ''}</span>`;
+  return `<b>${pLink(pid)}</b> <span class="player-pos">${bits}${r ? ' · ' + p.position + r : ''}</span>`;
 }
 
 function packageHtml(players, picks, M) {
@@ -2314,7 +2499,7 @@ function coachReport(rosterId) {
       const pl = state.players[String(p)];
       html += `
         <div class="roster-row">
-          <span class="player-name">${playerDisplayName(p)}${playerInjuryTag(p)}</span>
+          <span class="player-name">${pLink(p)}${playerInjuryTag(p)}</span>
           <span class="player-pos">${pl.position} · age ${pl.age} · still produces, dynasty value falling</span>
         </div>
       `;
@@ -2341,7 +2526,7 @@ function coachReport(rosterId) {
     fa.forEach(pid => {
       html += `
         <div class="roster-row">
-          <span class="player-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}</span>
+          <span class="player-name">${pLink(pid)}${playerInjuryTag(pid)}</span>
           <span class="player-pos">${playerMeta(pid)}</span>
         </div>
       `;
@@ -2623,7 +2808,7 @@ function tbAssetName(a) {
   const p = state.players[String(a.pid)] || {};
   const meta = [p.position, p.team].filter(Boolean).join(' · ');
   const fromTxt = a.from ? ' · from ' + teamName(a.from) : ' · FA';
-  return `<b>${playerDisplayName(a.pid)}</b>${playerInjuryTag(a.pid)} <span class="tb-meta">${meta}${fromTxt}</span>`;
+  return `<b>${pLink(a.pid)}</b>${playerInjuryTag(a.pid)} <span class="tb-meta">${meta}${fromTxt}</span>`;
 }
 
 /* ---------- coach: modal shell ---------- */
@@ -2726,6 +2911,8 @@ async function loadTradeHistory() {
   const nameByLeague = {};
   const seasonDraft = {};
   const trades = [];
+  const txAll = [];          // every completed transaction (all types)
+  const draftedBy = {};      // player_id -> {season, round, pick, rosterId, date, leagueId}
   const seen = {};
 
   await Promise.all(chain.map(async L => {
@@ -2751,15 +2938,23 @@ async function loadTradeHistory() {
       try {
         const detail = await fetchJSON(API + '/draft/' + d.draft_id);
         const picks = await fetchJSON(API + '/draft/' + d.draft_id + '/picks').catch(() => []);
+        const dseason = String((detail && detail.season) || L.season);
+        const ddate = (detail && detail.start_time) || 0;
         if (detail && detail.slot_to_roster_id) {
           const slots = Object.keys(detail.slot_to_roster_id).map(Number).sort((a,b) => a - b);
           const order = slots.map(x => String(detail.slot_to_roster_id[String(x)]));
           const byOverall = {};
           (picks || []).forEach(p => { if (p.pick_no) byOverall[p.pick_no] = p.player_id; });
-          seasonDraft[String(detail.season || L.season)] = {
-            order: order, picksByOverall: byOverall, type: detail.type, teams: order.length
-          };
+          seasonDraft[dseason] = { order: order, picksByOverall: byOverall, type: detail.type, teams: order.length };
         }
+        (picks || []).forEach(p => {
+          if (p.player_id && !draftedBy[String(p.player_id)]) {
+            draftedBy[String(p.player_id)] = {
+              season: dseason, round: p.round, pick: p.pick_no, rosterId: String(p.roster_id),
+              date: ddate, leagueId: lgId
+            };
+          }
+        });
       } catch(e) {}
     }
 
@@ -2768,20 +2963,23 @@ async function loadTradeHistory() {
     const txResults = await Promise.all(weeks.map(w =>
       fetchJSON(API + '/league/' + lgId + '/transactions/' + w).catch(() => [])));
     txResults.flat().forEach(t => {
-      if (!t || t.type !== 'trade' || t.status !== 'complete' || seen[t.transaction_id]) return;
+      if (!t || t.status !== 'complete' || seen[t.transaction_id]) return;
       seen[t.transaction_id] = 1;
-      trades.push({
-        id: t.transaction_id, leagueId: lgId, season: String(L.season),
+      const tx = {
+        id: t.transaction_id, leagueId: lgId, season: String(L.season), type: t.type,
         date: t.status_updated || t.created || 0,
         rosterIds: t.roster_ids || [], adds: t.adds || {}, drops: t.drops || {},
         draft_picks: t.draft_picks || [],
-        waiver_budget: Array.isArray(t.waiver_budget) ? t.waiver_budget : []
-      });
+        waiver_budget: Array.isArray(t.waiver_budget) ? t.waiver_budget : [],
+        settings: t.settings || {}
+      };
+      txAll.push(tx);
+      if (t.type === 'trade') trades.push(tx);
     });
   }));
 
   trades.sort((a,b) => b.date - a.date);
-  s.tradeHistory = { trades: trades, nameByLeague: nameByLeague, seasonDraft: seasonDraft };
+  s.tradeHistory = { trades: trades, txAll: txAll, draftedBy: draftedBy, nameByLeague: nameByLeague, seasonDraft: seasonDraft };
   return s.tradeHistory;
 }
 
@@ -2815,7 +3013,7 @@ function histSide(tr, rid, th, becameMode, M) {
 
   Object.keys(tr.adds).forEach(pid => {
     if (String(tr.adds[pid]) !== String(rid)) return;
-    items.push({ label: playerDisplayName(pid), pos: playerPositionOf(pid), value: M.dynValue(pid) });
+    items.push({ pid: String(pid), label: playerDisplayName(pid), pos: playerPositionOf(pid), value: M.dynValue(pid) });
   });
 
   tr.draft_picks.forEach(p => {
@@ -2825,12 +3023,14 @@ function histSide(tr, rid, th, becameMode, M) {
     let label = res && res.slot ? (p.season + ' ' + res.slot) : (p.season + ' Round ' + p.round);
     let pos = 'PICK';
     let value = pickValue(p.season, p.round, res ? res.overall : null, teams);
+    let bpid = null;
     if (becameMode && res && res.playerId) {
+      bpid = String(res.playerId);
       label = playerDisplayName(res.playerId);
       pos = playerPositionOf(res.playerId);
       value = M.dynValue(res.playerId);
     }
-    items.push({ label: label, pos: pos, value: value });
+    items.push({ pid: bpid, label: label, pos: pos, value: value });
   });
 
   (tr.waiver_budget || []).forEach(wb => {
@@ -2914,7 +3114,7 @@ function tradeHistoryHtml() {
       const win = winner && winner.rid === s.rid;
       html += `<div class="th-side">
         <div class="th-side-name">${histName(th, tr.leagueId, s.rid)}${win ? ' <span class="th-w">W</span>' : ''}</div>
-        ${s.got.items.map(it => `<div class="tb-row"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${escHtml(it.label)}</span><span class="tb-val">${fmt(it.value)}</span></div>`).join('') || '<div class="tb-meta">—</div>'}
+        ${s.got.items.map(it => `<div class="tb-row"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${it.pid ? pLink(it.pid) : escHtml(it.label)}</span><span class="tb-val">${fmt(it.value)}</span></div>`).join('') || '<div class="tb-meta">—</div>'}
         <div class="tb-side-total">Total: ${fmt(s.got.total)}</div>
       </div>`;
     });
@@ -2932,6 +3132,125 @@ function tradeHistoryHtml() {
     html += `</div></div>`;
   });
 
+  return html;
+}
+
+/* ---------- player card (rating + fantasy team history) ---------- */
+
+const STARTUP_TS = 1722470400000; // ~Aug 2024, before the first Sleeper season
+
+// A clickable player name that opens the player card. stopPropagation lets it live inside
+// other click targets (roster cards, news rows) without triggering their action.
+function pLink(pid) {
+  return '<span class="player-link" onclick="event.stopPropagation();event.preventDefault();openPlayerCard(\'' +
+    pid + '\')">' + playerDisplayName(pid) + '</span>';
+}
+
+// Chronological ownership timeline: ESPN startup, Sleeper rookie drafts, and every
+// add/drop/trade/waiver across the league history, with dates.
+function playerHistory(pid) {
+  pid = String(pid);
+  const th = state.tradeHistory;
+  const events = [];
+
+  const su = startupByPid()[pid];
+  if (su) events.push({ date: STARTUP_TS, dateText: '2024 · Startup', sort: 1,
+    tag: 'Startup Draft (ESPN)', text: 'Drafted by ' + su.t + ' — Round ' + su.r + ', Pick ' + su.p });
+
+  if (th) {
+    const db = th.draftedBy[pid];
+    if (db) {
+      const nm = (th.nameByLeague[db.leagueId] || {})[db.rosterId] || teamName(db.rosterId);
+      const teams = (th.seasonDraft[db.season] && th.seasonDraft[db.season].teams) || 8;
+      const slot = db.round + '.' + String((((db.pick || 1) - 1) % teams) + 1).padStart(2, '0');
+      events.push({ date: db.date, sort: 2, tag: db.season + ' Rookie Draft',
+        text: 'Drafted by ' + nm + ' — Pick ' + slot });
+    }
+
+    th.txAll.forEach(t => {
+      const nmMap = th.nameByLeague[t.leagueId] || {};
+      const nameOf = rid => nmMap[String(rid)] || teamName(rid);
+      if (t.type === 'trade') {
+        if (t.adds[pid] != null) {
+          const from = t.drops[pid] != null ? nameOf(t.drops[pid]) : null;
+          events.push({ date: t.date, sort: 3, tag: 'Trade',
+            text: from ? ('Traded from ' + from + ' to ' + nameOf(t.adds[pid])) : ('Traded to ' + nameOf(t.adds[pid])) });
+        }
+      } else if (t.adds[pid] != null) {
+        const bid = t.settings && t.settings.waiver_bid != null ? ' ($' + t.settings.waiver_bid + ')' : '';
+        const label = t.type === 'waiver' ? 'Waiver' : (t.type === 'commissioner' ? 'Commissioner' : 'Added');
+        events.push({ date: t.date, sort: 3, tag: label, text: label + ' by ' + nameOf(t.adds[pid]) + bid });
+      } else if (t.drops[pid] != null) {
+        events.push({ date: t.date, sort: 3, tag: 'Dropped', text: 'Dropped by ' + nameOf(t.drops[pid]) });
+      }
+    });
+  }
+
+  events.sort((a,b) => (a.date - b.date) || (a.sort - b.sort));
+  return events;
+}
+
+async function openPlayerCard(pid) {
+  pid = String(pid);
+  const root = document.getElementById('modalRoot');
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if (event.target === this) closeTeamCard()">
+      <div class="modal-card">
+        <button class="back-btn" onclick="closeTeamCard()">&larr; Back</button>
+        <div id="playerCardBody"><div class="status"><div class="spinner"></div><p>Loading player…</p></div></div>
+      </div>
+    </div>
+  `;
+  document.body.classList.add('modal-open');
+
+  try {
+    await loadValues();
+    await loadTradeHistory();
+  } catch(e) {}
+
+  const holder = document.getElementById('playerCardBody');
+  if (holder) holder.innerHTML = playerCardHtml(pid);
+}
+
+function playerCardHtml(pid) {
+  pid = String(pid);
+  const M = buildValueModel();
+  const p = state.players[pid] || {};
+  const meta = [p.position, p.team, p.age ? 'Age ' + p.age : ''].filter(Boolean).join(' · ');
+  const value = Math.round(M.dynValue(pid)).toLocaleString();
+  const rank = M.posRank(pid);
+  const events = playerHistory(pid);
+
+  let html = `
+    <div class="pc-head">
+      <img class="pc-photo" src="https://sleepercdn.com/content/nfl/players/${pid}.jpg" alt="" onerror="this.style.display='none'">
+      <div>
+        <h2>${playerDisplayName(pid)}${playerInjuryTag(pid)}</h2>
+        <div class="record-line">${escHtml(meta)}</div>
+      </div>
+    </div>
+    <div class="pc-rating">
+      <div><div class="pc-rating-num">${value}</div><div class="tb-meta">KTC value${p.position && rank ? ' · ' + p.position + rank : ''}</div></div>
+    </div>
+    <div class="detail-title">Fantasy Team History</div>
+  `;
+
+  if (!events.length) {
+    html += `<div class="empty">No draft or transaction history found for this player.</div>`;
+    return html;
+  }
+
+  html += `<div class="pc-timeline">`;
+  events.forEach(e => {
+    const when = e.dateText || (e.date ? new Date(e.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '');
+    html += `<div class="pc-event">
+      <div class="pc-when">${escHtml(when)}</div>
+      <div class="pc-what"><span class="tx-badge">${escHtml(e.tag)}</span> ${escHtml(e.text)}</div>
+    </div>`;
+  });
+  html += `</div>`;
   return html;
 }
 
@@ -3668,7 +3987,7 @@ function newsGroupHtml(g) {
     <details class="news-card">
       <summary>
         <div class="news-sum-top">
-          <span class="team-with-avatar"><b>${playerDisplayName(g.pid)}</b>${playerInjuryTag(g.pid)}
+          <span class="team-with-avatar"><b>${pLink(g.pid)}</b>${playerInjuryTag(g.pid)}
             <span class="tx-date">${escHtml(posMeta)}</span></span>
           <span class="tx-date">${escHtml(newsDate(latest.published))}${more > 0 ? ' · +' + more : ''}</span>
         </div>
