@@ -1609,6 +1609,7 @@ const WINNOW_AGE = {
 };
 
 const VALUES_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
+const IDMAP_CSV = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv';
 
 function splitCsvLine(line) {
   const out = [];
@@ -1646,23 +1647,45 @@ function ktcNameKey(name) {
     .replace(/[^a-z]/g, '');
 }
 
-// Loads KeepTradeCut dynasty values and indexes them by Sleeper player id (matched by
-// name+position against the already-loaded player DB), plus a pick-label -> value map.
+// Loads KeepTradeCut dynasty values and indexes them by Sleeper player id. Players are
+// matched by an EXACT id join (FantasyPros id -> Sleeper id, via DynastyProcess's id map)
+// so every priced player maps correctly and stays correct as names change; a name match is
+// only a fallback for the handful of near-zero rows the id map misses.
 async function loadValues() {
   const s = state;
   if (s.vals) return s.vals;
 
-  let rows;
+  let valRows, idText;
   try {
-    const r = await fetch(VALUES_CSV);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    rows = parseCsv(await r.text());
+    const [vr, ir] = await Promise.all([
+      fetch(VALUES_CSV).then(r => { if (!r.ok) throw new Error('values HTTP ' + r.status); return r.text(); }),
+      fetch(IDMAP_CSV).then(r => { if (!r.ok) throw new Error('idmap HTTP ' + r.status); return r.text(); })
+    ]);
+    valRows = parseCsv(vr);
+    idText = ir;
   } catch (e) {
     const failed = { byId:{}, picks:{}, ok:false, err:e.message };
     if (s === state) s.vals = failed;
     return failed;
   }
 
+  // FantasyPros id -> Sleeper id (exact, stable across seasons)
+  const fpToSleeper = {};
+  {
+    const lines = idText.split(/\r?\n/);
+    const header = splitCsvLine(lines[0]);
+    const fpIdx = header.indexOf('fantasypros_id');
+    const slIdx = header.indexOf('sleeper_id');
+    if (fpIdx !== -1 && slIdx !== -1) {
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i]) continue;
+        const c = splitCsvLine(lines[i]);
+        if (c[fpIdx] && c[slIdx]) fpToSleeper[c[fpIdx]] = c[slIdx];
+      }
+    }
+  }
+
+  // name+pos fallback for the few value rows the id map doesn't cover
   const nameIdx = {};
   Object.keys(s.players).forEach(pid => {
     const p = s.players[pid];
@@ -1676,12 +1699,12 @@ async function loadValues() {
   const byId = {};
   const picks = {};
 
-  rows.forEach(row => {
+  valRows.forEach(row => {
     const val = Number(row[col]) || 0;
     if (row.pos === 'PICK') { picks[row.player] = val; return; }
     if (['QB','RB','WR','TE'].indexOf(row.pos) === -1) return;
-    const pid = nameIdx[ktcNameKey(row.player) + '|' + row.pos];
-    if (pid) byId[String(pid)] = { value: val, age: Number(row.age) || null };
+    const pid = (row.fp_id && fpToSleeper[row.fp_id]) || nameIdx[ktcNameKey(row.player) + '|' + row.pos];
+    if (pid && s.players[pid]) byId[String(pid)] = { value: val, age: Number(row.age) || null };
   });
 
   const posLists = { QB:[], RB:[], WR:[], TE:[] };
