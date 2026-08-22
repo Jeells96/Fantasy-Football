@@ -679,6 +679,29 @@ body.modal-open { overflow:hidden; }
 .lr-name { font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lr-val { font-family:'DM Mono',monospace; font-size:.82rem; color:var(--muted); flex:none; }
 .lr-row .tb-grade { flex:none; min-width:30px; text-align:right; }
+/* Analyze League: collapsible categories + controls + per-team player breakdown */
+.lr-controls { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:4px 0 14px; }
+.lr-toggle { display:inline-flex; align-items:center; gap:8px; font-size:.9rem; cursor:pointer; }
+.lr-toggle input { width:16px; height:16px; accent-color:var(--accent); }
+.lr-nlabel { display:inline-flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); }
+.lr-nin { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 8px; font-family:'DM Mono',monospace; }
+.lr-cat { border:1px solid var(--border); border-radius:10px; background:var(--card); margin-bottom:8px; overflow:hidden; }
+.lr-cat-sum { display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; list-style:none; }
+.lr-cat-sum::-webkit-details-marker { display:none; }
+.lr-cat-title { font-family:'DM Mono',monospace; font-size:.78rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--text); flex:1; }
+.lr-cat-title::before { content:'▸ '; color:var(--muted); }
+.lr-cat[open] .lr-cat-title::before { content:'▾ '; }
+.lr-cat-lead { font-size:.8rem; color:var(--muted); display:inline-flex; align-items:center; gap:6px; }
+.lr-cat .lr-list { padding:0 10px 10px; }
+.lr-rowd { }
+.lr-rowd > summary.lr-row { cursor:pointer; list-style:none; }
+.lr-rowd > summary.lr-row::-webkit-details-marker { display:none; }
+.lr-players { padding:6px 8px 10px 44px; display:flex; flex-direction:column; gap:5px; }
+.lr-prow { display:flex; justify-content:space-between; gap:10px; font-size:.85rem; padding:3px 0; border-top:1px solid rgba(30,39,64,.5); }
+.lr-prow:first-child { border-top:none; }
+/* A forced display on the content overrides the browser's <details> collapse, so hide it
+   explicitly when the category/row is closed. */
+.lr-cat:not([open]) > .lr-list, .lr-rowd:not([open]) > .lr-players { display:none !important; }
 
 .trade-card {
   background:rgba(0,0,0,.22);
@@ -1073,6 +1096,8 @@ function freshState() {
     personByUserId:{},
     myUserId:'',
     myTeam:getStoredMyTeam(),
+    alBench:(function(){ try { return localStorage.getItem('ff.alBench') === '1'; } catch(e) { return false; } })(),
+    alBenchN:(function(){ try { return parseInt(localStorage.getItem('ff.alBenchN'), 10) || 1; } catch(e) { return 1; } })(),
     userByRosterId:{},
     draftDetails:{},
     draftPicksBySeason:{},
@@ -2675,49 +2700,103 @@ function leagueGrade(value, avg) {
   return 'F';
 }
 
-// One ranked table: rows = [{rid, value}] (unsorted), graded vs their own average.
-function rankTableHtml(title, rows, myRid) {
+// How many starting slots a position fills (QB absorbs superflex). Flex is not split out.
+function leagueSlots(M) {
+  const c = starterCounts();
+  return {
+    QB: Math.max(1, (c.QB || 0) + (M.sf ? (c.SUPER_FLEX || 0) : 0)),
+    RB: Math.max(1, c.RB || 0),
+    WR: Math.max(1, c.WR || 0),
+    TE: Math.max(1, c.TE || 0)
+  };
+}
+
+// The players counted for a team+category, listed with their production values.
+function lrPlayerList(pids, M) {
+  const rows = (pids || []).slice().sort((a,b) => M.baseValue(b) - M.baseValue(a)).map(pid => {
+    const p = state.players[String(pid)] || {};
+    const pos = p.position || '';
+    return `<div class="lr-prow"><span>${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}${pLink(pid)}</span><span class="tb-val">${Math.round(M.baseValue(pid)).toLocaleString()}</span></div>`;
+  }).join('');
+  return `<div class="lr-players">${rows || '<div class="tb-meta">—</div>'}</div>`;
+}
+
+// One collapsible category. rows = [{rid, value, pids}]. Collapsed by default; each team row
+// expands to the players counted in that rating.
+function lrCategoryHtml(title, rows, myRid, M) {
   const sorted = rows.slice().sort((a,b) => b.value - a.value);
   const avg = sorted.length ? sorted.reduce((s,x) => s + x.value, 0) / sorted.length : 0;
-  let h = `<div class="detail-title">${escHtml(title)}</div><div class="lr-list">`;
+  const leader = sorted[0];
+  const leadGrade = leader ? leagueGrade(leader.value, avg) : '';
+  let h = `<details class="lr-cat"><summary class="lr-cat-sum">
+      <span class="lr-cat-title">${escHtml(title)}</span>
+      <span class="lr-cat-lead">${leader ? escHtml(teamName(leader.rid)) + ' ' : ''}<span class="tb-grade ${tbGradeClass(leadGrade)}">${leadGrade}</span></span>
+    </summary><div class="lr-list">`;
   sorted.forEach((row, i) => {
     const grade = leagueGrade(row.value, avg);
     const rcls = i < 3 ? ' r' + (i + 1) : '';
     const me = String(row.rid) === String(myRid) ? ' me' : '';
-    h += `<div class="lr-row${me}">
+    h += `<details class="lr-rowd"><summary class="lr-row${me}">
       <span class="lr-rank${rcls}">${i + 1}</span>
       <span class="lr-name">${escHtml(teamName(row.rid))}</span>
       <span class="lr-val">${Math.round(row.value).toLocaleString()}</span>
       <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
-    </div>`;
+    </summary>${lrPlayerList(row.pids, M)}</details>`;
   });
-  return h + `</div>`;
+  return h + `</div></details>`;
 }
 
-// League-wide report: per-position starter strength, overall starters, and overall roster
-// (starters + top 5 bench). Ranks + grades every team; highlights myRid.
-function leagueReport(myRid) {
-  const league = analyzeLeague();
-  const M = league.M;
-  const ids = Object.keys(league.teams);
-  if (!ids.length) return '<div class="empty">No teams found.</div>';
+function alSetBench(on) {
+  state.alBench = !!on;
+  try { localStorage.setItem('ff.alBench', on ? '1' : '0'); } catch(e) {}
+  alRerender();
+}
+function alSetBenchN(n) {
+  n = Math.max(0, Math.min(10, parseInt(n, 10) || 0));
+  state.alBenchN = n;
+  try { localStorage.setItem('ff.alBenchN', String(n)); } catch(e) {}
+  alRerender();
+}
+function alRerender() {
+  const body = document.getElementById('coachBody');
+  if (body) body.innerHTML = leagueReport(myRosterId());
+}
 
-  // Overall roster value = optimal-starter total + the 5 best bench players.
-  ids.forEach(id => {
-    const t = league.teams[id];
-    const inLineup = {}; (t.lineup.picked || []).forEach(p => inLineup[String(p)] = 1);
-    const bench = (t.players || []).filter(p => !inLineup[String(p)])
-      .map(p => M.baseValue(p)).sort((a,b) => b - a);
-    t.benchTop5 = bench.slice(0, 5).reduce((a,b) => a + b, 0);
-    t.overall = t.now + t.benchTop5;
+// League-wide rankings: overall + per position. Ratings use starters, plus (optionally, via
+// the bench toggle) the top N backups per position. Every category is collapsible; every team
+// row expands to the players counted.
+function leagueReport(myRid) {
+  const M = buildValueModel();
+  const slots = leagueSlots(M);
+  const POS = ['QB','RB','WR','TE'];
+  const benchN = state.alBench ? (state.alBenchN || 0) : 0;
+
+  const teams = state.rosters.map(r => {
+    const rid = String(r.roster_id);
+    const byPos = {}; POS.forEach(p => byPos[p] = []);
+    ((r.players) || []).map(String).forEach(pid => { const pos = playerPositionOf(pid); if (byPos[pos]) byPos[pos].push(pid); });
+    POS.forEach(p => byPos[p].sort((a,b) => M.baseValue(b) - M.baseValue(a)));
+    const pool = {}, posVal = {}; let overallPids = [];
+    POS.forEach(p => {
+      pool[p] = byPos[p].slice(0, slots[p] + benchN);
+      posVal[p] = pool[p].reduce((s,pid) => s + M.baseValue(pid), 0);
+      overallPids = overallPids.concat(pool[p]);
+    });
+    return { rid, pool, posVal, overall: POS.reduce((s,p) => s + posVal[p], 0), overallPids };
   });
 
-  let html = `<div class="coach-sub">How all ${ids.length} teams rank — by position, by starting lineup, and by overall roster (best starters + top-5 bench). Grades are relative to the league average; your team is highlighted.</div>`;
+  if (!teams.length) return '<div class="empty">No teams found.</div>';
 
-  html += rankTableHtml('Overall Roster — starters + top 5 bench', ids.map(id => ({ rid: id, value: league.teams[id].overall })), myRid);
-  html += rankTableHtml('Starting Lineup', ids.map(id => ({ rid: id, value: league.teams[id].now })), myRid);
-  ['QB','RB','WR','TE'].forEach(pos => {
-    html += rankTableHtml(pos + ' — starter strength', ids.map(id => ({ rid: id, value: league.teams[id].strength[pos] })), myRid);
+  const depthNote = benchN ? `starters + top ${benchN} backup${benchN > 1 ? 's' : ''} per position` : 'starters only';
+  let html = `<div class="coach-sub">How all ${teams.length} teams rank, by overall roster and by position (${depthNote}). Grades are vs the league average; your team is highlighted. Tap a category to open it, and a team to see who's counted.</div>`;
+  html += `<div class="lr-controls">
+      <label class="lr-toggle"><input type="checkbox" ${state.alBench ? 'checked' : ''} onchange="alSetBench(this.checked)"> Include bench depth</label>
+      ${state.alBench ? `<label class="lr-nlabel">Backups / position <input class="lr-nin" type="number" min="0" max="10" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
+    </div>`;
+
+  html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, pids: t.overallPids })), myRid, M);
+  POS.forEach(p => {
+    html += lrCategoryHtml(p, teams.map(t => ({ rid: t.rid, value: t.posVal[p], pids: t.pool[p] })), myRid, M);
   });
   return html;
 }
