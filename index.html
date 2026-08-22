@@ -798,6 +798,10 @@ body.modal-open { overflow:hidden; }
 .tb-adj .tb-val { color:var(--accent); }
 .va-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid currentColor; font-size:.6rem; margin-left:4px; cursor:pointer; opacity:.8; }
 .tb-even-hint { margin-top:12px; padding:10px 12px; background:rgba(74,157,232,.1); border:1px solid rgba(74,157,232,.3); border-radius:8px; font-size:.85rem; color:var(--text); }
+.tb-adj-inline { color:var(--accent); font-family:'DM Mono',monospace; }
+.th-histhead { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:16px 0 10px; }
+.th-gear { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; width:30px; height:30px; font-size:.9rem; cursor:pointer; flex:none; }
+.th-gear:hover { border-color:var(--accent); color:var(--accent); }
 
 /* column selector */
 .tb-search-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; margin:10px 0 4px; }
@@ -2111,13 +2115,21 @@ async function loadValues() {
   ]);
 
   const fc = {};
-  const picks = {};
+  const fcPicks = {};
   (fcRows || []).forEach(row => {
     const p = row.player || {};
-    if (p.position === 'PICK') { picks[p.name] = row.value || 0; return; }
+    if (p.position === 'PICK') { fcPicks[p.name] = row.value || 0; return; }
     if (!p.sleeperId) return;
     fc[String(p.sleeperId)] = { value: row.value || 0, redraft: (row.redraftValue != null ? row.redraftValue : row.value) || 0 };
   });
+
+  // Draft-pick values come from DynastyCalc (its calculator data chunk), keyed to the league's
+  // team count + format. Fall back to FantasyCalc's picks only if DynastyCalc is unreachable.
+  const dcTc = dcTeamCountKey();
+  const dcValKey = tePrem ? (sf ? 'tepSf' : 'tep') : (sf ? 'superflex' : 'value');
+  const dcPicks = dcText ? await loadDcPicks(dcText, dcTc, dcValKey) : {};
+  const picks = Object.keys(dcPicks).length ? dcPicks : fcPicks;
+  const picksSource = Object.keys(dcPicks).length ? 'DynastyCalc' : 'FantasyCalc';
 
   const fcValsDesc = Object.keys(fc).map(k => fc[k].value).sort((a,b) => b - a);
 
@@ -2152,8 +2164,8 @@ async function loadValues() {
   // DynastyCalc values from its rankings page (best-effort scrape), keyed to Sleeper id by name
   const dcScore = {};
   if (dcText) {
-    const tc = dcTeamCountKey();
-    const valKey = tePrem ? (sf ? 'tepSf' : 'tep') : (sf ? 'superflex' : 'value');
+    const tc = dcTc;
+    const valKey = dcValKey;
     const rt = dcText.replace(/\\"/g, '"');
     const dcRe = new RegExp('"name":"((?:\\\\.|[^"\\\\])*)","position":"(QB|RB|WR|TE)","team":"[^"]*","age":\\d+,"values":\\{[\\s\\S]*?"' + tc + '":\\{"value":(\\d+),"superflex":(\\d+),"tep":(\\d+),"tepSf":(\\d+)\\}', 'g');
     let m;
@@ -2202,7 +2214,7 @@ async function loadValues() {
     posLists[pos].forEach((pid, i) => byId[pid].posRank = i + 1);
   });
 
-  const vals = { byId:byId, picks:picks, ok: Object.keys(byId).length > 0, sf:sf, sources:sources };
+  const vals = { byId:byId, picks:picks, picksSource:picksSource, ok: Object.keys(byId).length > 0, sf:sf, sources:sources };
   if (!vals.ok) vals.err = 'no values returned';
   if (s === state) s.vals = vals;
   return vals;
@@ -2325,15 +2337,34 @@ function buildValueModel() {
   return { sf, baseValue, dynValue, startable, posRank: posRankOf };
 }
 
-const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th' };
+const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th' };
 
-// Maps a pick to its FantasyCalc value: the exact enumerated slot when the order is known
-// (current rookie class), otherwise the Early/Mid/Late tier, then the plain round value.
+// Maps a pick to its value. Prefers DynastyCalc's pick values (keyed either by exact overall
+// slot "2026 Pick 12", or by tier "2027 Early 1st Round"); falls back to FantasyCalc's naming
+// if DynastyCalc picks weren't reachable.
 function pickValue(year, round, overall, numTeams) {
   const picks = (state.vals && state.vals.picks) || {};
   const nt = numTeams || 12;
   const ord = ROUND_ORD[round];
+  let tier = 'Mid';
+  if (overall) {
+    const frac = (overall - (round - 1) * nt) / nt;
+    tier = frac <= 1/3 ? 'Early' : (frac <= 2/3 ? 'Mid' : 'Late');
+  }
 
+  // DynastyCalc keys
+  if (overall) {
+    const dcExact = picks[year + ' Pick ' + overall];
+    if (dcExact != null) return dcExact;
+  }
+  if (ord) {
+    const dcTier = picks[year + ' ' + tier + ' ' + ord + ' Round'];
+    if (dcTier != null) return dcTier;
+    const dcMid = picks[year + ' Mid ' + ord + ' Round'];
+    if (dcMid != null) return dcMid;
+  }
+
+  // FantasyCalc-style fallback
   if (overall) {
     const slot = overall - (round - 1) * nt;
     if (slot >= 1) {
@@ -2341,22 +2372,47 @@ function pickValue(year, round, overall, numTeams) {
       if (exact != null) return exact;
     }
   }
-
   if (ord) {
-    let tier = 'Mid';
-    if (overall) {
-      const frac = (overall - (round - 1) * nt) / nt;
-      tier = frac <= 1/3 ? 'Early' : (frac <= 2/3 ? 'Mid' : 'Late');
-    }
     const tiered = picks[year + ' ' + ord + ' (' + tier + ')'];
     if (tiered != null) return tiered;
     const generic = picks[year + ' ' + ord];
     if (generic != null) return generic;
   }
 
-  // Rounds 5+ (or a year FantasyCalc doesn't list) — decay from that year's 4th.
-  const anchor = picks[year + ' 4th'] || picks['2029 4th'] || picks['2028 4th'] || 20;
-  return anchor * Math.pow(0.5, Math.max(1, round - 4));
+  // Rounds beyond what's listed — decay from a known 4th.
+  const anchor = picks[year + ' Mid 4th Round'] || picks[year + ' 4th'] ||
+    picks['2028 Mid 4th Round'] || picks['2028 4th'] || 20;
+  return anchor * Math.pow(0.55, Math.max(1, round - 4));
+}
+
+// Fetch DynastyCalc's pick values from its data chunk (the rankings page references it).
+// Best-effort: stops at the first chunk that carries the pick table, returns {} on failure.
+async function loadDcPicks(rankingsHtml, tc, valKey) {
+  try {
+    const base = 'https://www.dynastycalc.com';
+    const urls = Array.from(new Set((rankingsHtml.match(/\/_next\/static\/chunks\/[A-Za-z0-9_.-]+\.js/g) || [])))
+      .filter(u => !/turbopack/.test(u));
+    for (const u of urls) {
+      let txt = '';
+      try { const r = await fetch(base + u); if (r.ok) txt = await r.text(); } catch (e) { continue; }
+      if (txt.indexOf('id:"dp') !== -1 && /1st Round/.test(txt)) return parseDcPicks(txt, tc, valKey);
+    }
+  } catch (e) {}
+  return {};
+}
+// Parse the pick objects out of the chunk into { "<DynastyCalc pick name>": value }.
+function parseDcPicks(chunk, tc, valKey) {
+  const out = {};
+  const nameRe = /name:"(20\d\d (?:Pick \d+|(?:Early|Mid|Late) \d(?:st|nd|rd|th) Round))"/g;
+  const valRe = new RegExp('[,{]' + tc + ':\\{value:(\\d+),superflex:(\\d+),tep:(\\d+),tepSf:(\\d+)\\}');
+  let m;
+  while ((m = nameRe.exec(chunk))) {
+    const vm = chunk.slice(m.index, m.index + 500).match(valRe);
+    if (!vm) continue;
+    const vals = { value: +vm[1], superflex: +vm[2], tep: +vm[3], tepSf: +vm[4] };
+    out[m[1]] = vals[valKey] || vals.value;
+  }
+  return out;
 }
 
 /* ---------- Value Adjustment (KeepTradeCut-style consolidation/stud premium) ----------
@@ -3448,19 +3504,25 @@ function tradePending(tr, th) {
   return (tr.draft_picks || []).some(p => !pickResolved(th, p));
 }
 
-// Compute the graded sides for a trade (net = received − sent). Returns a plain
-// data object that can be rendered live OR persisted as a frozen snapshot.
+// Compute the graded sides for a trade. net = (received + Value Adjustment) − sent, where the
+// Value Adjustment credits the side taking the fewer, more elite pieces (KTC-style). Returns a
+// plain object that can be rendered live OR persisted as a frozen snapshot.
 function computeTradeSides(tr, becameMode, M, th) {
   th = th || state.tradeHistory;
-  const sides = tr.rosterIds.map(rid => {
+  const raw = tr.rosterIds.map(rid => {
     const got = histSide(tr, rid, th, becameMode, M);
     const sent = histSent(tr, rid, th, becameMode, M);
-    const net = got.total - sent;
     return { rid: String(rid), name: histName(th, tr.leagueId, rid),
-      items: got.items, total: got.total, sent: sent, net: net,
-      ownPct: net / Math.max(got.total, sent, 1) };
+      items: got.items, total: got.total, sent: sent, pieces: got.items.length };
   });
-  const totalRecv = sides.reduce((a,x) => a + x.total, 0) || 1;
+  const sides = raw.map(s => {
+    const maxOther = Math.max(0, ...raw.filter(x => x !== s).map(x => x.pieces));
+    const adj = valueAdjustment(s.items.map(it => it.value), maxOther);
+    const net = (s.total + adj) - s.sent;
+    return { rid: s.rid, name: s.name, items: s.items, total: s.total, sent: s.sent,
+      adj: adj, net: net, ownPct: net / Math.max(s.total + adj, s.sent, 1) };
+  });
+  const totalRecv = sides.reduce((a,x) => a + x.total + x.adj, 0) || 1;
   const best = sides.slice().sort((a,b) => b.net - a.net)[0];
   const worstOwnPct = Math.min.apply(null, sides.map(x => x.ownPct));
   const wonBy = best ? best.net / totalRecv : 0;
@@ -3484,34 +3546,58 @@ async function loadFrozenGrades() {
   return map;
 }
 
+// Build the persistable frozen snapshot for a trade at current values.
+function buildFrozenSnapshot(tr, M, th) {
+  const d = computeTradeSides(tr, true, M, th);
+  return {
+    tradeId: tr.id, leagueId: tr.leagueId, season: tr.season, date: tr.date || 0,
+    grade: d.grade, spineCls: d.spineCls, winnerRid: d.winnerRid || '', wonBy: d.wonBy || 0,
+    sides: d.sides.map(s => ({
+      rid: s.rid, name: s.name,
+      total: Math.round(s.total), sent: Math.round(s.sent), net: Math.round(s.net),
+      adj: Math.round(s.adj || 0),
+      items: (s.items || []).map(it => ({
+        pid: it.pid || '', label: it.label || '', pos: it.pos || '',
+        value: Math.round(it.value || 0), via: it.via || ''
+      }))
+    }))
+  };
+}
+
+async function persistFrozen(snap) {
+  try {
+    await db.collection(TRADE_GRADES_COLLECTION).doc(snap.tradeId)
+      .set(Object.assign({}, snap, { frozenAt: firebase.firestore.FieldValue.serverTimestamp() }));
+    return true;
+  } catch (e) { return false; }
+}
+
 // Freeze every ready-but-unfrozen trade at current values and persist it.
 async function freezeReadyTrades(th, M) {
   if (!state.frozenGrades) state.frozenGrades = {};
   const pending = [];
   th.trades.forEach(tr => {
     if (state.frozenGrades[tr.id] || !tradeReadyToFreeze(tr, th)) return;
-    const d = computeTradeSides(tr, true, M, th);
-    const snap = {
-      tradeId: tr.id, leagueId: tr.leagueId, season: tr.season, date: tr.date || 0,
-      grade: d.grade, spineCls: d.spineCls, winnerRid: d.winnerRid || '', wonBy: d.wonBy || 0,
-      sides: d.sides.map(s => ({
-        rid: s.rid, name: s.name,
-        total: Math.round(s.total), sent: Math.round(s.sent), net: Math.round(s.net),
-        items: (s.items || []).map(it => ({
-          pid: it.pid || '', label: it.label || '', pos: it.pos || '',
-          value: Math.round(it.value || 0), via: it.via || ''
-        }))
-      }))
-    };
+    const snap = buildFrozenSnapshot(tr, M, th);
     state.frozenGrades[tr.id] = snap;   // optimistic: usable even if the write fails
     pending.push(snap);
   });
-  for (const snap of pending) {
-    try {
-      await db.collection(TRADE_GRADES_COLLECTION).doc(snap.tradeId)
-        .set(Object.assign({}, snap, { frozenAt: firebase.firestore.FieldValue.serverTimestamp() }));
-    } catch(e) { /* keep the optimistic local copy; retry on a future load */ }
-  }
+  for (const snap of pending) await persistFrozen(snap);
+}
+
+// Admin: recompute and OVERWRITE every ready trade's frozen grade with current values
+// (DynastyCalc picks + Value Adjustment). Triggered from the pin-protected Trade History gear.
+async function refreezeAllTrades(th, M) {
+  if (!state.frozenGrades) state.frozenGrades = {};
+  const snaps = [];
+  th.trades.forEach(tr => {
+    if (!tradeReadyToFreeze(tr, th)) return;   // pending trades stay pending
+    const snap = buildFrozenSnapshot(tr, M, th);
+    state.frozenGrades[tr.id] = snap;
+    snaps.push(snap);
+  });
+  for (const snap of snaps) await persistFrozen(snap);
+  return snaps.length;
 }
 
 // Ensure frozen grades are loaded and any newly-ready trades are frozen.
@@ -3569,7 +3655,7 @@ function tradeCardHtml(tr, opts) {
         const via = it.via ? ` <span class="tb-via">via ${escHtml(it.via)}</span>` : '';
         return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}${via}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
       }).join('') || '<div class="tb-meta">—</div>'}
-      <div class="tb-side-total">Gets ${fmt(s.total)} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
+      <div class="tb-side-total">Gets ${fmt(s.total)}${s.adj > 0 ? ` <span class="tb-adj-inline" title="Value Adjustment: elite, roster-spot-efficient assets are worth more than their raw sum">+${fmt(s.adj)} adj</span>` : ''} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
     </div>`;
   });
 
@@ -3646,6 +3732,28 @@ function tradeHistFilterClick(name) {        // from a leaderboard row: toggle o
   rerenderTradeHistory();
 }
 
+// Pin-protected: recompute and overwrite every saved frozen grade with current values
+// (DynastyCalc picks + Value Adjustment). Pending pick-trades are left untouched.
+async function tradeHistSettings() {
+  const pin = prompt('Enter passcode to re-freeze all saved trade grades:');
+  if (pin == null) return;
+  if (pin !== NOTE_PASSCODE) { alert('Incorrect passcode.'); return; }
+  if (!confirm('Overwrite ALL saved trade grades with current values (DynastyCalc picks + Value Adjustment)? This replaces the frozen grades and can’t be undone.')) return;
+  const th = state.tradeHistory;
+  if (!th) return;
+  const body = document.getElementById('coachBody');
+  if (body) body.innerHTML = '<div class="status"><div class="spinner"></div><p>Re-freezing trade grades…</p></div>';
+  try {
+    await loadValues();
+    const n = await refreezeAllTrades(th, buildValueModel());
+    rerenderTradeHistory();
+    setTimeout(() => alert('Re-froze ' + n + ' trade grade' + (n === 1 ? '' : 's') + '.'), 50);
+  } catch (e) {
+    rerenderTradeHistory();
+    setTimeout(() => alert('Re-freeze failed: ' + e.message), 50);
+  }
+}
+
 function tradeHistoryHtml() {
   const th = state.tradeHistory;
   if (!th || !th.trades.length) {
@@ -3662,7 +3770,7 @@ function tradeHistoryHtml() {
   const names = stats.map(s => s.name).slice().sort((a, b) => a.localeCompare(b));
   const opts = `<option value="">All teams</option>` +
     names.map(n => `<option value="${escHtml(n)}" ${n === filter ? 'selected' : ''}>${escHtml(n)}</option>`).join('');
-  html += `<div class="section-label">Trade History</div>`;
+  html += `<div class="th-histhead"><span class="section-label" style="margin:0;">Trade History</span><button class="th-gear" onclick="tradeHistSettings()" title="Re-freeze saved grades (passcode)">⚙</button></div>`;
   html += `<div class="th-filter">
       <span class="section-label" style="margin:0;">Filter by team</span>
       <select class="year-select" onchange="tradeHistFilterSet(this.value)">${opts}</select>
