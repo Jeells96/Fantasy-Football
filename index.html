@@ -1962,14 +1962,22 @@ function ktcNameKey(name) {
     .replace(/[^a-z]/g, '');
 }
 
-// Values blend up to three sources: FantasyCalc's public API (the scale anchor, and where
-// pick values + win-now come from), theffdynasty's crowd-comparison rankings, and
-// DynastyProcess's published value feed. The two secondary sources sit on different scales,
-// so each is mapped by rank onto FantasyCalc's value curve, then all present sources are
-// averaged — a value reflecting every site on FantasyCalc's familiar scale.
+// Values blend several sources: FantasyCalc's public API (the scale anchor, and where pick
+// values + win-now come from), theffdynasty's crowd rankings, DynastyProcess's published
+// value feed, and DynastyCalc's rankings. The secondary sources sit on different scales, so
+// each is mapped by rank onto FantasyCalc's value curve, then all present sources are
+// averaged. Any source that's unreachable/stale is simply dropped from the average.
 const FF_SUPA_URL = 'https://hkdfsupummsdqdjfezwh.supabase.co/rest/v1/calculated_rankings';
 const FF_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrZGZzdXB1bW1zZHFkamZlendoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzOTg1MjAsImV4cCI6MjA3NTk3NDUyMH0.LASpdlCnftonrj4HBwr6eHkvLRGSbFT9iJ79_whAAXY';
 const DP_VALUES_URL = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
+const DC_RANKINGS_URL = 'https://www.dynastycalc.com/rankings';
+
+function dcTeamCountKey() {
+  const n = state.rosters.length || 12;
+  let best = 12, bd = 1e9;
+  [8, 10, 12, 14, 16].forEach(o => { const d = Math.abs(o - n); if (d < bd) { bd = d; best = o; } });
+  return String(best);
+}
 
 // Map a {pid: score} table onto a sorted descending list of FantasyCalc values, by rank.
 function rankMapOntoFc(scoreByPid, fcValsDesc) {
@@ -2010,7 +2018,7 @@ async function loadValues() {
     return failed;
   }
 
-  let ffRows = null, dpText = null;
+  let ffRows = null, dpText = null, dcText = null;
   await Promise.all([
     (async () => {
       try {
@@ -2023,6 +2031,12 @@ async function loadValues() {
         const r = await fetch(DP_VALUES_URL);
         if (r.ok) dpText = await r.text();
       } catch (e) { dpText = null; }
+    })(),
+    (async () => {
+      try {
+        const r = await fetch(DC_RANKINGS_URL);
+        if (r.ok) dcText = await r.text();
+      } catch (e) { dcText = null; }
     })()
   ]);
 
@@ -2065,16 +2079,35 @@ async function loadValues() {
     });
   }
 
+  // DynastyCalc values from its rankings page (best-effort scrape), keyed to Sleeper id by name
+  const dcScore = {};
+  if (dcText) {
+    const tc = dcTeamCountKey();
+    const valKey = tePrem ? (sf ? 'tepSf' : 'tep') : (sf ? 'superflex' : 'value');
+    const rt = dcText.replace(/\\"/g, '"');
+    const dcRe = new RegExp('"name":"((?:\\\\.|[^"\\\\])*)","position":"(QB|RB|WR|TE)","team":"[^"]*","age":\\d+,"values":\\{[\\s\\S]*?"' + tc + '":\\{"value":(\\d+),"superflex":(\\d+),"tep":(\\d+),"tepSf":(\\d+)\\}', 'g');
+    let m;
+    while ((m = dcRe.exec(rt))) {
+      const pid = nameIdx[ktcNameKey(m[1]) + '|' + m[2]];
+      if (pid && s.players[pid]) {
+        const vals = { value: +m[3], superflex: +m[4], tep: +m[5], tepSf: +m[6] };
+        dcScore[pid] = vals[valKey] || vals.value;
+      }
+    }
+  }
+
   const ffScaled = rankMapOntoFc(ffScore, fcValsDesc);
   const dpScaled = rankMapOntoFc(dpScore, fcValsDesc);
+  const dcScaled = rankMapOntoFc(dcScore, fcValsDesc);
 
   const sources = ['FantasyCalc'];
   if (Object.keys(ffScaled).length) sources.push('theffdynasty');
   if (Object.keys(dpScaled).length) sources.push('DynastyProcess');
+  if (Object.keys(dcScaled).length) sources.push('DynastyCalc');
 
   const byId = {};
   const allPids = {};
-  [fc, ffScaled, dpScaled].forEach(map => Object.keys(map).forEach(pid => allPids[pid] = 1));
+  [fc, ffScaled, dpScaled, dcScaled].forEach(map => Object.keys(map).forEach(pid => allPids[pid] = 1));
   Object.keys(allPids).forEach(pid => {
     if (!s.players[pid]) return;
     // parts: each source's contribution (on FantasyCalc's scale) that feeds the average
@@ -2082,6 +2115,7 @@ async function loadValues() {
     if (fc[pid]) parts.push({ src:'FantasyCalc', value: fc[pid].value });
     if (ffScaled[pid] != null) parts.push({ src:'theffdynasty', value: ffScaled[pid] });
     if (dpScaled[pid] != null) parts.push({ src:'DynastyProcess', value: dpScaled[pid] });
+    if (dcScaled[pid] != null) parts.push({ src:'DynastyCalc', value: dcScaled[pid] });
     if (!parts.length) return;
     const value = parts.reduce((a,b) => a + b.value, 0) / parts.length;
     byId[pid] = { value: value, redraft: fc[pid] ? fc[pid].redraft : value, posRank: null, parts: parts };
@@ -3283,18 +3317,21 @@ function tradeCardHtml(tr, opts) {
     return r && r.playerId;
   });
 
+  // Grade each side by what it GAVE UP vs what it GOT (net), not just total received —
+  // so in a 3-team deal a team that flips a single pick for a stud grades as the winner.
   const sides = tr.rosterIds.map(rid => {
     const got = histSide(tr, rid, th, became, M);
     const sent = histSent(tr, rid, th, became, M);
-    return { rid: String(rid), got: got, net: got.total - sent };
+    const net = got.total - sent;
+    return { rid: String(rid), got: got, sent: sent, net: net, ownPct: net / Math.max(got.total, sent, 1) };
   });
 
-  const totals = sides.map(s => s.got.total);
-  const hi = Math.max.apply(null, totals), lo = Math.min.apply(null, totals);
-  const gradePct = hi > 0 ? (hi - lo) / hi : 0;
-  const pct = wonByPct(hi, lo);
-  const winner = pct >= 0.05 ? sides.slice().sort((a,b) => b.net - a.net)[0] : null;
-  const grade = tbGrade(-gradePct);
+  const totalRecv = sides.reduce((a,x) => a + x.got.total, 0) || 1;
+  const best = sides.slice().sort((a,b) => b.net - a.net)[0];
+  const worstOwnPct = Math.min.apply(null, sides.map(x => x.ownPct));
+  const wonBy = best ? best.net / totalRecv : 0;   // winner's net as a share of value moved
+  const winner = wonBy >= 0.05 ? best : null;
+  const grade = tbGrade(worstOwnPct);              // graded by the most-shorted side
   const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
 
   let html = `<div class="tx-card">
@@ -3313,14 +3350,14 @@ function tradeCardHtml(tr, opts) {
         const rowCls = (hl && it.pid === hl) ? ' pc-hl' : '';
         return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
       }).join('') || '<div class="tb-meta">—</div>'}
-      <div class="tb-side-total">Total: ${fmt(s.got.total)}</div>
+      <div class="tb-side-total">Gets ${fmt(s.got.total)} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
     </div>`;
   });
 
   html += `</div>`;
 
   const verdict = winner
-    ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(pct * 100)}%</span>`
+    ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(wonBy * 100)}%</span>`
     : `<span class="tx-add">Even — fair deal</span>`;
 
   html += `<div class="tx-line th-foot">${verdict}`;
