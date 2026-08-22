@@ -855,7 +855,16 @@ body.modal-open { overflow:hidden; }
 .tlb-net.pos { color:var(--green); }
 .tlb-net.neg { color:var(--danger); }
 .th-filter { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.tlb-pend { color:var(--accent); }
 @media (max-width:560px){ .tlb-trades { display:none; } }
+
+/* frozen / pending trade states */
+.tx-badge.frozen { color:var(--green); border-color:rgba(74,232,160,.45); }
+.tx-badge.pending { color:var(--accent); border-color:rgba(232,200,74,.5); }
+.tx-trade.pending { border-left-color:var(--muted); border-left-style:dashed; }
+.tx-verdict.tx-pending { color:var(--accent); }
+.tx-verdict.tx-pending::before { content:"\23F3 "; }
+.tb-via { font-family:'DM Mono',monospace; font-size:.62rem; color:var(--muted); }
 
 /* clickable player names + player card */
 .player-link { cursor:pointer; text-decoration:underline; text-decoration-color:rgba(232,200,74,.4); text-underline-offset:2px; }
@@ -957,6 +966,7 @@ const DEFAULT_LEAGUE_ID = '1330745662001659904';
 const LEAGUE_ID_STORAGE_KEY = 'ff.leagueId';
 const NOTE_PASSCODE = '2325';
 const NOTES_COLLECTION = 'leagueNotes';
+const TRADE_GRADES_COLLECTION = 'tradeGrades';
 const MAX_WEEKS = 18;
 
 const REAL_NAME_BY_SLEEPER_TEAM = {
@@ -1006,7 +1016,8 @@ function freshState() {
     trendingLoading:false,
     vals:null,
     tradeHistory:null,
-    tradeHistoryOpen:{},
+    frozenGrades:null,
+    frozenGradesLoaded:false,
     draftOrder:null,
     draftOrderLoading:false,
     newsTeam:null,
@@ -1082,7 +1093,8 @@ async function init() {
       fetchJSON(API + '/league/' + s.leagueId + '/drafts'),
       fetchJSON(API + '/players/nfl'),
       fetchJSON(API + '/state/nfl'),
-      loadNotes()
+      loadNotes(),
+      loadFrozenGrades()
     ]);
 
     s.tradedPicks = results[0].status === 'fulfilled' ? (results[0].value || []) : [];
@@ -3160,6 +3172,7 @@ function renderCoachTab(rosterId, mode) {
       } else if (mode === 'history') {
         body.innerHTML = '<div class="status"><div class="spinner"></div><p>Loading trades from your league history…</p></div>';
         await loadTradeHistory();
+        await ensureFrozenGrades();
         if (state.activeTab !== 'coach' || state.coachMode !== 'history') return;
         body.innerHTML = tradeHistoryHtml();
       } else {
@@ -3311,13 +3324,15 @@ function histSide(tr, rid, th, becameMode, M) {
     let pos = 'PICK';
     let value = pickValue(p.season, p.round, res ? res.overall : null, teams);
     let bpid = null;
+    let via = '';
     if (becameMode && res && res.playerId) {
       bpid = String(res.playerId);
+      via = res.slot ? (p.season + ' ' + res.slot) : (p.season + ' Round ' + p.round);
       label = playerDisplayName(res.playerId);
       pos = playerPositionOf(res.playerId);
       value = M.dynValue(res.playerId);
     }
-    items.push({ pid: bpid, label: label, pos: pos, value: value });
+    items.push({ pid: bpid, label: label, pos: pos, value: value, via: via });
   });
 
   (tr.waiver_budget || []).forEach(wb => {
@@ -3344,115 +3359,206 @@ function histSent(tr, rid, th, becameMode, M) {
   return total;
 }
 
-function tradeHistToggle(id) {
-  state.tradeHistoryOpen[id] = !state.tradeHistoryOpen[id];
-  const body = document.getElementById('coachBody');
-  if (body) body.innerHTML = tradeHistoryHtml();
+/* ---------- frozen trade grades ---------------------------------------------
+   Grades are graded ONCE and then frozen, so they never drift as player values
+   change. A trade freezes as soon as it's "ready": no draft picks, or all of
+   its picks have been drafted. At that point it's graded in "became" mode — a
+   traded pick is valued as the player it turned into — and the snapshot (per-
+   side values, net, grade, winner) is written to Firestore. Trades with picks
+   that haven't drafted yet stay "pending": shown live, excluded from standings,
+   and locked in later when the pick is used. ------------------------------- */
+
+// Has this pick been drafted into a player yet?
+function pickResolved(th, p) {
+  const r = resolveHistPick(th, p.season, p.round, p.roster_id);
+  return !!(r && r.playerId);
+}
+// A trade can be frozen once every pick it involves has been drafted.
+function tradeReadyToFreeze(tr, th) {
+  return (tr.draft_picks || []).every(p => pickResolved(th, p));
+}
+function tradePending(tr, th) {
+  return (tr.draft_picks || []).some(p => !pickResolved(th, p));
 }
 
-// One trade rendered as a graded card. opts: { M, becameToggle, highlightPid }.
+// Compute the graded sides for a trade (net = received − sent). Returns a plain
+// data object that can be rendered live OR persisted as a frozen snapshot.
+function computeTradeSides(tr, becameMode, M, th) {
+  th = th || state.tradeHistory;
+  const sides = tr.rosterIds.map(rid => {
+    const got = histSide(tr, rid, th, becameMode, M);
+    const sent = histSent(tr, rid, th, becameMode, M);
+    const net = got.total - sent;
+    return { rid: String(rid), name: histName(th, tr.leagueId, rid),
+      items: got.items, total: got.total, sent: sent, net: net,
+      ownPct: net / Math.max(got.total, sent, 1) };
+  });
+  const totalRecv = sides.reduce((a,x) => a + x.total, 0) || 1;
+  const best = sides.slice().sort((a,b) => b.net - a.net)[0];
+  const worstOwnPct = Math.min.apply(null, sides.map(x => x.ownPct));
+  const wonBy = best ? best.net / totalRecv : 0;
+  const grade = tbGrade(worstOwnPct);
+  return {
+    sides: sides, grade: grade, spineCls: 'spine-' + tbGradeClass(grade).slice(2),
+    winnerRid: wonBy >= 0.05 ? best.rid : '', wonBy: wonBy
+  };
+}
+
+// Read all frozen snapshots from Firestore into state (once, best-effort).
+async function loadFrozenGrades() {
+  if (state.frozenGradesLoaded) return state.frozenGrades;
+  const map = {};
+  try {
+    const snap = await db.collection(TRADE_GRADES_COLLECTION).get();
+    snap.docs.forEach(doc => { map[doc.id] = doc.data(); });
+  } catch(e) { /* offline: fall back to live grading */ }
+  state.frozenGrades = map;
+  state.frozenGradesLoaded = true;
+  return map;
+}
+
+// Freeze every ready-but-unfrozen trade at current values and persist it.
+async function freezeReadyTrades(th, M) {
+  if (!state.frozenGrades) state.frozenGrades = {};
+  const pending = [];
+  th.trades.forEach(tr => {
+    if (state.frozenGrades[tr.id] || !tradeReadyToFreeze(tr, th)) return;
+    const d = computeTradeSides(tr, true, M, th);
+    const snap = {
+      tradeId: tr.id, leagueId: tr.leagueId, season: tr.season, date: tr.date || 0,
+      grade: d.grade, spineCls: d.spineCls, winnerRid: d.winnerRid || '', wonBy: d.wonBy || 0,
+      sides: d.sides.map(s => ({
+        rid: s.rid, name: s.name,
+        total: Math.round(s.total), sent: Math.round(s.sent), net: Math.round(s.net),
+        items: (s.items || []).map(it => ({
+          pid: it.pid || '', label: it.label || '', pos: it.pos || '',
+          value: Math.round(it.value || 0), via: it.via || ''
+        }))
+      }))
+    };
+    state.frozenGrades[tr.id] = snap;   // optimistic: usable even if the write fails
+    pending.push(snap);
+  });
+  for (const snap of pending) {
+    try {
+      await db.collection(TRADE_GRADES_COLLECTION).doc(snap.tradeId)
+        .set(Object.assign({}, snap, { frozenAt: firebase.firestore.FieldValue.serverTimestamp() }));
+    } catch(e) { /* keep the optimistic local copy; retry on a future load */ }
+  }
+}
+
+// Ensure frozen grades are loaded and any newly-ready trades are frozen.
+// Safe to await before rendering any trade card. Needs values loaded to freeze.
+async function ensureFrozenGrades() {
+  const th = state.tradeHistory;
+  if (!th) return;
+  if (!state.frozenGradesLoaded) { try { await loadFrozenGrades(); } catch(e) {} }
+  if (state.vals) { try { await freezeReadyTrades(th, buildValueModel()); } catch(e) {} }
+}
+
+// One trade rendered as a graded card. Uses the frozen snapshot when present,
+// otherwise grades live (pending trades). opts: { M, highlightPid }.
 function tradeCardHtml(tr, opts) {
   opts = opts || {};
   const th = state.tradeHistory;
   const M = opts.M || buildValueModel();
   const fmt = v => Math.round(v).toLocaleString();
   const hl = opts.highlightPid ? String(opts.highlightPid) : null;
-  const became = opts.becameToggle && !!state.tradeHistoryOpen[tr.id];
 
-  const hasPicks = tr.draft_picks.some(p => {
-    const r = resolveHistPick(th, p.season, p.round, p.roster_id);
-    return r && r.playerId;
-  });
+  const frozen = state.frozenGrades && state.frozenGrades[tr.id];
+  const pending = !frozen && tradePending(tr, th);
+  const data = frozen || computeTradeSides(tr, true, M, th);
+  const sides = data.sides;
+  const grade = data.grade;
+  const spineCls = data.spineCls;
+  // A pending trade has no final winner yet, so don't crown one.
+  const winner = (!pending && data.winnerRid) ? sides.find(s => String(s.rid) === String(data.winnerRid)) : null;
+  const wonBy = data.wonBy || 0;
 
-  // Grade each side by what it GAVE UP vs what it GOT (net), not just total received —
-  // so in a 3-team deal a team that flips a single pick for a stud grades as the winner.
-  const sides = tr.rosterIds.map(rid => {
-    const got = histSide(tr, rid, th, became, M);
-    const sent = histSent(tr, rid, th, became, M);
-    const net = got.total - sent;
-    return { rid: String(rid), got: got, sent: sent, net: net, ownPct: net / Math.max(got.total, sent, 1) };
-  });
-
-  const totalRecv = sides.reduce((a,x) => a + x.got.total, 0) || 1;
-  const best = sides.slice().sort((a,b) => b.net - a.net)[0];
-  const worstOwnPct = Math.min.apply(null, sides.map(x => x.ownPct));
-  const wonBy = best ? best.net / totalRecv : 0;   // winner's net as a share of value moved
-  const winner = wonBy >= 0.05 ? best : null;
-  const grade = tbGrade(worstOwnPct);              // graded by the most-shorted side
-  const spineCls = 'spine-' + tbGradeClass(grade).slice(2);  // g-a -> spine-a
   const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
-  const matchup = sides.map(s => escHtml(histName(th, tr.leagueId, s.rid))).join(' <span class="tx-x">&#8644;</span> ');
-  const winPill = winner ? `<span class="tx-winner">${escHtml(histName(th, tr.leagueId, winner.rid))} +${Math.round(wonBy * 100)}%</span>` : '';
+  const matchup = sides.map(s => escHtml(s.name)).join(' <span class="tx-x">&#8644;</span> ');
+  const winPill = winner ? `<span class="tx-winner">${escHtml(winner.name)} +${Math.round(wonBy * 100)}%</span>` : '';
+  const statusBadge = frozen
+    ? `<span class="tx-badge frozen" title="Grade locked at trade value — won't change">Final</span>`
+    : (pending ? `<span class="tx-badge pending" title="Locks once the traded pick is drafted">Pending</span>` : '');
 
-  let html = `<div class="tx-card tx-trade ${spineCls}">
+  let html = `<div class="tx-card tx-trade ${spineCls}${pending ? ' pending' : ''}">
     <div class="tx-head">
       <span class="tx-matchup">${matchup}</span>
-      <span class="tx-date">${date}${became ? ' · <span class="tx-badge trade">what it became</span>' : ''}</span>
-      ${winPill}
+      <span class="tx-date">${date}</span>
+      ${statusBadge}
+      ${pending ? '' : winPill}
       <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
     </div>
     <div class="th-sides">`;
 
   sides.forEach(s => {
-    const win = winner && winner.rid === s.rid;
+    const win = winner && String(winner.rid) === String(s.rid);
     html += `<div class="th-side">
-      <div class="th-side-name">${histName(th, tr.leagueId, s.rid)}${win ? ' <span class="th-w">W</span>' : ''}</div>
-      ${s.got.items.map(it => {
+      <div class="th-side-name">${escHtml(s.name)}${win ? ' <span class="th-w">W</span>' : ''}</div>
+      ${(s.items || []).map(it => {
         const nameHtml = it.pid ? pLink(it.pid) : escHtml(it.label);
-        const rowCls = (hl && it.pid === hl) ? ' pc-hl' : '';
-        return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
+        const rowCls = (hl && String(it.pid) === hl) ? ' pc-hl' : '';
+        const via = it.via ? ` <span class="tb-via">via ${escHtml(it.via)}</span>` : '';
+        return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}${via}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
       }).join('') || '<div class="tb-meta">—</div>'}
-      <div class="tb-side-total">Gets ${fmt(s.got.total)} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
+      <div class="tb-side-total">Gets ${fmt(s.total)} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
     </div>`;
   });
 
   html += `</div>`;
 
-  const verdict = winner
-    ? `<span class="tx-verdict">${escHtml(histName(th, tr.leagueId, winner.rid))} won by ${Math.round(wonBy * 100)}%</span>`
-    : `<span class="tx-verdict tx-even">Even — fair deal</span>`;
+  const foot = pending
+    ? `<span class="tx-verdict tx-pending">Not final — locks when the traded pick is drafted</span>`
+    : (winner
+        ? `<span class="tx-verdict">${escHtml(winner.name)} won by ${Math.round(wonBy * 100)}%</span>`
+        : `<span class="tx-verdict tx-even">Even — fair deal</span>`);
 
-  html += `<div class="tx-line th-foot">${verdict}`;
-  if (opts.becameToggle && hasPicks) {
-    html += `<button class="tb-add-btn" onclick="tradeHistToggle('${tr.id}')">${became ? '← Flip back' : 'See what picks became →'}</button>`;
-  }
-  html += `</div></div>`;
+  html += `<div class="tx-line th-foot">${foot}</div></div>`;
   return html;
 }
 
-// Net trade value per team (person) across the whole dynasty, at current values.
-// Seeds every current team so all 8 appear even with zero trades. Sorted best net first.
+// Net trade value per team (person), counting only FINAL (frozen) trades — a
+// pending pick-trade doesn't move the standings until its grade locks. Seeds
+// every current team so all 8 appear. Sorted best net first.
 function tradeTeamStats(th, M) {
-  const net = {}, cnt = {};
-  const ensure = n => { if (!(n in net)) { net[n] = 0; cnt[n] = 0; } };
+  const net = {}, cnt = {}, pend = {};
+  const ensure = n => { if (!(n in net)) { net[n] = 0; cnt[n] = 0; pend[n] = 0; } };
   state.rosters.forEach(r => ensure(teamName(r.roster_id)));
   th.trades.forEach(tr => {
+    const frozen = state.frozenGrades && state.frozenGrades[tr.id];
     tr.rosterIds.forEach(rid => {
       const n = histName(th, tr.leagueId, rid);
       ensure(n);
-      net[n] += histSide(tr, rid, th, false, M).total - histSent(tr, rid, th, false, M);
-      cnt[n] += 1;
+      if (frozen) {
+        const side = (frozen.sides || []).find(s => String(s.rid) === String(rid));
+        if (side) { net[n] += side.net; cnt[n] += 1; }
+      } else {
+        pend[n] += 1;   // pending — excluded from net until it locks
+      }
     });
   });
   return Object.keys(net)
-    .map(n => ({ name: n, net: net[n], count: cnt[n] }))
+    .map(n => ({ name: n, net: net[n], count: cnt[n], pending: pend[n] }))
     .sort((a, b) => b.net - a.net || b.count - a.count || a.name.localeCompare(b.name));
 }
 
 function tradeLeaderboardHtml(stats, activeName) {
   const fmt = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
+  const anyPending = stats.some(t => t.pending);
   let h = `<div class="section-label" style="margin-top:0;">Trade Leaderboard</div>`;
-  h += `<div class="coach-sub">Net value gained across every trade, at current values. #1 is the best trader, #${stats.length} the worst. Tap a team to filter the history below.</div>`;
+  h += `<div class="coach-sub">Net value from every finalized trade — #1 is the best trader, #${stats.length} the worst. Grades lock in the day a trade is made${anyPending ? ' (pick trades lock once the pick is drafted, so pending ones aren\'t counted yet)' : ''}. Tap a team to filter the history below.</div>`;
   h += `<div class="tlb">`;
   stats.forEach((t, i) => {
     const rank = i + 1;
     const rcls = rank <= 3 ? ' r' + rank : '';
     const netcls = t.count ? (t.net > 1 ? 'pos' : (t.net < -1 ? 'neg' : '')) : '';
     const active = t.name === activeName ? ' active' : '';
+    const pendTxt = t.pending ? ` <span class="tlb-pend">+${t.pending} pending</span>` : '';
     h += `<div class="tlb-row${active}" onclick="tradeHistFilterClick('${escJs(t.name)}')">
       <span class="tlb-rank${rcls}">${rank}</span>
       <span class="tlb-name">${escHtml(t.name)}</span>
-      <span class="tlb-trades">${t.count} trade${t.count === 1 ? '' : 's'}</span>
+      <span class="tlb-trades">${t.count} final${pendTxt}</span>
       <span class="tlb-net ${netcls}">${t.count ? fmt(t.net) : '—'}</span>
     </div>`;
   });
@@ -3495,7 +3601,7 @@ function tradeHistoryHtml() {
       <select class="year-select" onchange="tradeHistFilterSet(this.value)">${opts}</select>
       ${filter ? `<button class="tb-add-btn" onclick="tradeHistFilterSet('')">Show all</button>` : ''}
     </div>`;
-  html += `<div class="coach-sub">${filter ? ('Trades involving ' + escHtml(filter)) : 'Every completed trade across your dynasty'}, graded with current values (${valueSourceLabel()}, hindsight). For trades with picks, reveal what they became.</div>`;
+  html += `<div class="coach-sub">${filter ? ('Trades involving ' + escHtml(filter)) : 'Every completed trade across your dynasty'}. Each grade is locked in the day the trade is made and never changes; pick trades lock once the pick is drafted (valued as the player it became).</div>`;
 
   const shown = filter
     ? th.trades.filter(tr => tr.rosterIds.some(rid => histName(th, tr.leagueId, rid) === filter))
@@ -3512,7 +3618,7 @@ function tradeHistoryHtml() {
       html += `<div class="detail-title">${tr.season} Season</div>`;
       lastSeason = tr.season;
     }
-    html += tradeCardHtml(tr, { M: M, becameToggle: true });
+    html += tradeCardHtml(tr, { M: M });
   });
 
   return html;
@@ -3590,6 +3696,7 @@ async function openPlayerCard(pid) {
   try {
     await loadValues();
     await loadTradeHistory();
+    await ensureFrozenGrades();
   } catch(e) {}
 
   const holder = document.getElementById('playerCardBody');
