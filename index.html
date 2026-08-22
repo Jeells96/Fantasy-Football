@@ -815,13 +815,30 @@ body.modal-open { overflow:hidden; }
 .pos-k, .pos-def { background:rgba(120,130,160,.2); color:var(--muted); }
 .pos-pick { background:rgba(180,120,232,.22); color:#b478e8; }
 
-/* trade history */
-.th-sides { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:8px 0; }
+/* trade history — grade-coded trade card (scoped so bracket/transaction .tx-card are untouched) */
+.tx-trade { background:linear-gradient(180deg,#1a2133,#141a28); border:1px solid var(--border); border-left:4px solid var(--accent2); border-radius:12px; padding:0; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+.tx-trade.spine-a { border-left-color:var(--green); }
+.tx-trade.spine-b { border-left-color:var(--accent2); }
+.tx-trade.spine-c { border-left-color:var(--accent); }
+.tx-trade.spine-d { border-left-color:var(--danger); }
+.tx-trade + .tx-trade { margin-top:16px; }
+.tx-head { display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; padding:11px 14px; border-bottom:1px solid var(--border); background:rgba(255,255,255,.03); }
+.tx-matchup { font-family:'Bebas Neue',sans-serif; font-size:1.25rem; letter-spacing:.5px; line-height:1; color:var(--text); display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.tx-matchup .tx-x { color:var(--accent2); font-family:system-ui,'Segoe UI Symbol','Noto Sans Symbols',sans-serif; font-size:1.05rem; font-weight:700; position:relative; top:-1px; }
+.tx-head .tx-date { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--muted); }
+.tx-winner { display:inline-flex; align-items:center; gap:5px; font-family:'DM Mono',monospace; font-size:.6rem; text-transform:uppercase; letter-spacing:1px; padding:2px 8px; border-radius:20px; background:rgba(74,232,160,.12); color:var(--green); border:1px solid rgba(74,232,160,.4); }
+.tx-winner::before { content:"👑"; font-size:.7rem; }
+.tx-head .tb-grade { margin-left:auto; }
+.th-sides { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 14px; margin:0; }
 @media (max-width:560px){ .th-sides { grid-template-columns:1fr; } }
 .th-side-name { font-weight:600; margin-bottom:6px; }
 .th-w { background:var(--green); color:#000; font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:3px; padding:1px 5px; }
-.th-foot { display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); margin-top:8px; padding-top:10px; }
+.th-foot { display:flex; align-items:center; gap:10px; padding:10px 14px; margin:0; border-top:1px solid var(--border); }
 .th-foot .tb-add-btn { margin-left:auto; }
+.tx-verdict { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--green); }
+.tx-verdict::before { content:"▲ "; opacity:.8; }
+.tx-verdict.tx-even { color:var(--muted); }
+.tx-verdict.tx-even::before { content:"= "; }
 
 /* clickable player names + player card */
 .player-link { cursor:pointer; text-decoration:underline; text-decoration-color:rgba(232,200,74,.4); text-underline-offset:2px; }
@@ -837,14 +854,26 @@ body.modal-open { overflow:hidden; }
 .pc-src { display:flex; justify-content:space-between; gap:20px; padding:3px 0; font-size:.9rem; }
 .pc-src-avg { border-top:1px solid var(--border); margin-top:4px; padding-top:6px; font-weight:600; }
 .pc-src-avg .tb-val { color:var(--green); }
-.pc-timeline { display:flex; flex-direction:column; }
-.pc-event { display:flex; gap:14px; padding:10px 0; border-top:1px solid var(--border); }
-.pc-event:first-child { border-top:none; }
-.pc-when { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--muted); width:110px; flex:none; }
-.pc-what { font-size:.9rem; }
-.pc-trade { padding:8px 0; }
-.pc-hl { outline:1px solid var(--accent); border-radius:6px; }
+/* player-history: vertical timeline rail with typed, glyph-marked nodes */
+.pc-timeline { position:relative; display:flex; flex-direction:column; padding-left:28px; }
+.pc-timeline::before { content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--border); }
+.pc-event { position:relative; display:flex; gap:12px; align-items:baseline; padding:10px 0; }
+.pc-event::before { content:attr(data-glyph); position:absolute; left:-27px; top:8px; width:19px; height:19px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.66rem; line-height:1; z-index:1; background:var(--surface); border:2px solid var(--evc,var(--muted)); color:var(--evc,var(--muted)); }
+.pc-when { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--muted); width:96px; flex:none; padding-top:2px; }
+.pc-what { font-size:.88rem; color:var(--text); display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.ev-tag { font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:1.4px; text-transform:uppercase; font-weight:600; padding:2px 8px; border-radius:5px; white-space:nowrap; color:var(--evc,var(--muted)); border:1px solid var(--evc,var(--muted)); background:var(--evbg,transparent); }
+.pc-event[data-type="startup"]{ --evc:var(--accent); --evbg:rgba(232,200,74,.12); }
+.pc-event[data-type="rookie"] { --evc:#b478e8; --evbg:rgba(180,120,232,.14); }
+.pc-event[data-type="added"]  { --evc:var(--green); --evbg:rgba(74,232,160,.12); }
+.pc-event[data-type="waiver"] { --evc:var(--accent2); --evbg:rgba(74,157,232,.12); }
+.pc-event[data-type="commish"]{ --evc:var(--accent); --evbg:rgba(232,200,74,.12); }
+.pc-event[data-type="commish"] .ev-tag { border-style:dashed; }
+.pc-event[data-type="dropped"]{ --evc:var(--danger); --evbg:rgba(232,74,106,.12); }
+.pc-trade { position:relative; padding:8px 0; }
+.pc-trade::before { content:"\21C4"; position:absolute; left:-28px; top:16px; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; line-height:1; z-index:1; background:var(--surface); border:2px solid var(--accent2); color:var(--accent2); }
+.pc-hl { outline:1px solid var(--accent); outline-offset:1px; border-radius:6px; }
 .pc-hl .tb-val { color:var(--accent); }
+@media (max-width:560px){ .pc-when { width:78px; } }
 
 .empty, .error-msg {
   background:var(--card);
@@ -3332,12 +3361,17 @@ function tradeCardHtml(tr, opts) {
   const wonBy = best ? best.net / totalRecv : 0;   // winner's net as a share of value moved
   const winner = wonBy >= 0.05 ? best : null;
   const grade = tbGrade(worstOwnPct);              // graded by the most-shorted side
+  const spineCls = 'spine-' + tbGradeClass(grade).slice(2);  // g-a -> spine-a
   const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
+  const matchup = sides.map(s => escHtml(histName(th, tr.leagueId, s.rid))).join(' <span class="tx-x">&#8644;</span> ');
+  const winPill = winner ? `<span class="tx-winner">${escHtml(histName(th, tr.leagueId, winner.rid))} +${Math.round(wonBy * 100)}%</span>` : '';
 
-  let html = `<div class="tx-card">
-    <div class="tx-top">
-      <span class="tx-date">${date}${became ? ' <span class="tx-badge trade">what it became</span>' : ''}</span>
-      <span style="margin-left:auto">Grade: <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span></span>
+  let html = `<div class="tx-card tx-trade ${spineCls}">
+    <div class="tx-head">
+      <span class="tx-matchup">${matchup}</span>
+      <span class="tx-date">${date}${became ? ' · <span class="tx-badge trade">what it became</span>' : ''}</span>
+      ${winPill}
+      <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
     </div>
     <div class="th-sides">`;
 
@@ -3357,8 +3391,8 @@ function tradeCardHtml(tr, opts) {
   html += `</div>`;
 
   const verdict = winner
-    ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(wonBy * 100)}%</span>`
-    : `<span class="tx-add">Even — fair deal</span>`;
+    ? `<span class="tx-verdict">${escHtml(histName(th, tr.leagueId, winner.rid))} won by ${Math.round(wonBy * 100)}%</span>`
+    : `<span class="tx-verdict tx-even">Even — fair deal</span>`;
 
   html += `<div class="tx-line th-foot">${verdict}`;
   if (opts.becameToggle && hasPicks) {
@@ -3409,7 +3443,7 @@ function playerHistory(pid) {
   const events = [];
 
   const su = startupByPid()[pid];
-  if (su) events.push({ date: STARTUP_TS, dateText: '2024 · Startup', sort: 1,
+  if (su) events.push({ date: STARTUP_TS, dateText: '2024', sort: 1, kind: 'startup',
     tag: 'Startup Draft (ESPN)', text: 'Drafted by ' + su.t + ' — Round ' + su.r + ', Pick ' + su.p });
 
   if (th) {
@@ -3418,7 +3452,7 @@ function playerHistory(pid) {
       const nm = (th.nameByLeague[db.leagueId] || {})[db.rosterId] || teamName(db.rosterId);
       const teams = (th.seasonDraft[db.season] && th.seasonDraft[db.season].teams) || 8;
       const slot = db.round + '.' + String((((db.pick || 1) - 1) % teams) + 1).padStart(2, '0');
-      events.push({ date: db.date, sort: 2, tag: db.season + ' Rookie Draft',
+      events.push({ date: db.date, sort: 2, kind: 'rookie', tag: db.season + ' Rookie Draft',
         text: 'Drafted by ' + nm + ' — Pick ' + slot });
     }
 
@@ -3432,9 +3466,10 @@ function playerHistory(pid) {
       } else if (t.adds[pid] != null) {
         const bid = t.settings && t.settings.waiver_bid != null ? ' ($' + t.settings.waiver_bid + ')' : '';
         const label = t.type === 'waiver' ? 'Waiver' : (t.type === 'commissioner' ? 'Commissioner' : 'Added');
-        events.push({ date: t.date, sort: 3, tag: label, text: label + ' by ' + nameOf(t.adds[pid]) + bid });
+        const kind = t.type === 'waiver' ? 'waiver' : (t.type === 'commissioner' ? 'commissioner' : 'add');
+        events.push({ date: t.date, sort: 3, kind: kind, tag: label, text: label + ' by ' + nameOf(t.adds[pid]) + bid });
       } else if (t.drops[pid] != null) {
-        events.push({ date: t.date, sort: 3, tag: 'Dropped', text: 'Dropped by ' + nameOf(t.drops[pid]) });
+        events.push({ date: t.date, sort: 3, kind: 'drop', tag: 'Dropped', text: 'Dropped by ' + nameOf(t.drops[pid]) });
       }
     });
   }
@@ -3508,16 +3543,28 @@ function playerCardHtml(pid) {
     return html;
   }
 
+  const EV = {
+    startup:      { type:'startup', glyph:'★', label:'Startup' },   // ★
+    rookie:       { type:'rookie',  glyph:'◆', label:'Rookie' },    // ◆
+    add:          { type:'added',   glyph:'＋', label:'Added' },     // ＋
+    waiver:       { type:'waiver',  glyph:'↑', label:'Waiver' },    // ↑
+    commissioner: { type:'commish', glyph:'⚙', label:'Commish' },   // ⚙
+    drop:         { type:'dropped', glyph:'−', label:'Dropped' },   // −
+  };
+
   html += `<div class="pc-timeline">`;
   events.forEach(e => {
     if (e.isTrade) {
       html += `<div class="pc-trade">${tradeCardHtml(e.tr, { M: M, highlightPid: pid })}</div>`;
       return;
     }
+    const ev = EV[e.kind] || { type:'', glyph:'•', label:e.tag };
     const when = e.dateText || (e.date ? new Date(e.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '');
-    html += `<div class="pc-event">
+    // drop the leading verb so the type pill isn't echoed by the sentence ("Added by X" -> "by X")
+    const detail = e.text.replace(/^(Added|Dropped|Waiver|Commissioner)\s+/, '');
+    html += `<div class="pc-event" data-type="${ev.type}" data-glyph="${ev.glyph}">
       <div class="pc-when">${escHtml(when)}</div>
-      <div class="pc-what"><span class="tx-badge">${escHtml(e.tag)}</span> ${escHtml(e.text)}</div>
+      <div class="pc-what"><span class="ev-tag">${escHtml(ev.label)}</span> ${escHtml(detail)}</div>
     </div>`;
   });
   html += `</div>`;
