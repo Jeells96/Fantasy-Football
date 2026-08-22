@@ -829,8 +829,14 @@ body.modal-open { overflow:hidden; }
 .pc-head { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
 .pc-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; background:var(--surface); border:1px solid var(--border); flex:none; }
 .pc-head h2 { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:1.5px; color:var(--accent); }
-.pc-rating { background:rgba(0,0,0,.2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:inline-block; }
+.pc-rating { background:rgba(0,0,0,.2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:inline-block; min-width:220px; }
+.pc-rating summary { cursor:pointer; list-style:none; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.pc-rating summary::-webkit-details-marker { display:none; }
 .pc-rating-num { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--green); line-height:1; }
+.pc-breakdown { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.pc-src { display:flex; justify-content:space-between; gap:20px; padding:3px 0; font-size:.9rem; }
+.pc-src-avg { border-top:1px solid var(--border); margin-top:4px; padding-top:6px; font-weight:600; }
+.pc-src-avg .tb-val { color:var(--green); }
 .pc-timeline { display:flex; flex-direction:column; }
 .pc-event { display:flex; gap:14px; padding:10px 0; border-top:1px solid var(--border); }
 .pc-event:first-child { border-top:none; }
@@ -1943,13 +1949,14 @@ async function loadValues() {
   [fc, ffScaled, dpScaled].forEach(map => Object.keys(map).forEach(pid => allPids[pid] = 1));
   Object.keys(allPids).forEach(pid => {
     if (!s.players[pid]) return;
+    // parts: each source's contribution (on FantasyCalc's scale) that feeds the average
     const parts = [];
-    if (fc[pid]) parts.push(fc[pid].value);
-    if (ffScaled[pid] != null) parts.push(ffScaled[pid]);
-    if (dpScaled[pid] != null) parts.push(dpScaled[pid]);
+    if (fc[pid]) parts.push({ src:'FantasyCalc', value: fc[pid].value });
+    if (ffScaled[pid] != null) parts.push({ src:'theffdynasty', value: ffScaled[pid] });
+    if (dpScaled[pid] != null) parts.push({ src:'DynastyProcess', value: dpScaled[pid] });
     if (!parts.length) return;
-    const value = parts.reduce((a,b) => a + b, 0) / parts.length;
-    byId[pid] = { value: value, redraft: fc[pid] ? fc[pid].redraft : value, posRank: null };
+    const value = parts.reduce((a,b) => a + b.value, 0) / parts.length;
+    byId[pid] = { value: value, redraft: fc[pid] ? fc[pid].redraft : value, posRank: null, parts: parts };
   });
 
   // Positional rank from the blended values.
@@ -3294,6 +3301,15 @@ function playerCardHtml(pid) {
   const rank = M.posRank(pid);
   const events = playerHistory(pid);
 
+  const parts = (state.vals && state.vals.byId[pid] && state.vals.byId[pid].parts) || [];
+  const breakdown = parts.length > 1
+    ? `<div class="pc-breakdown">
+        ${parts.map(pt => `<div class="pc-src"><span>${pt.src}${pt.src !== 'FantasyCalc' ? ' <span class="tb-meta">(scaled)</span>' : ''}</span><span class="tb-val">${Math.round(pt.value).toLocaleString()}</span></div>`).join('')}
+        <div class="pc-src pc-src-avg"><span>Average</span><span class="tb-val">${value}</span></div>
+        <div class="tb-meta" style="margin-top:6px;">Other sites are rank-matched onto FantasyCalc's scale before averaging.</div>
+      </div>`
+    : '';
+
   let html = `
     <div class="pc-head">
       <img class="pc-photo" src="https://sleepercdn.com/content/nfl/players/${pid}.jpg" alt="" onerror="this.style.display='none'">
@@ -3302,9 +3318,13 @@ function playerCardHtml(pid) {
         <div class="record-line">${escHtml(meta)}</div>
       </div>
     </div>
-    <div class="pc-rating">
-      <div><div class="pc-rating-num">${value}</div><div class="tb-meta">${valueSourceLabel()}${p.position && rank ? ' · ' + p.position + rank : ''}</div></div>
-    </div>
+    <details class="pc-rating"${breakdown ? '' : ' open'}>
+      <summary>
+        <span class="pc-rating-num">${value}</span>
+        <span class="tb-meta">${valueSourceLabel()}${p.position && rank ? ' · ' + p.position + rank : ''}${breakdown ? ' · tap for breakdown' : ''}</span>
+      </summary>
+      ${breakdown}
+    </details>
     <div class="detail-title">Fantasy Team History</div>
   `;
 
