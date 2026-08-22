@@ -840,6 +840,23 @@ body.modal-open { overflow:hidden; }
 .tx-verdict.tx-even { color:var(--muted); }
 .tx-verdict.tx-even::before { content:"= "; }
 
+/* trade leaderboard + team filter */
+.tlb { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+.tlb-row { display:flex; align-items:center; gap:12px; padding:8px 12px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:border-color .12s, background .12s; }
+.tlb-row:hover { border-color:var(--accent2); }
+.tlb-row.active { border-color:var(--accent); background:rgba(232,200,74,.08); }
+.tlb-rank { font-family:'Bebas Neue',sans-serif; font-size:1.15rem; width:26px; height:26px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--surface); border:1px solid var(--border); color:var(--muted); }
+.tlb-rank.r1 { background:var(--accent); color:#000; border-color:var(--accent); }
+.tlb-rank.r2 { background:#c8ccd8; color:#000; border-color:#c8ccd8; }
+.tlb-rank.r3 { background:#cd8a54; color:#000; border-color:#cd8a54; }
+.tlb-name { font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tlb-trades { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--muted); flex:none; }
+.tlb-net { font-family:'DM Mono',monospace; font-size:.85rem; min-width:64px; text-align:right; flex:none; color:var(--muted); }
+.tlb-net.pos { color:var(--green); }
+.tlb-net.neg { color:var(--danger); }
+.th-filter { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+@media (max-width:560px){ .tlb-trades { display:none; } }
+
 /* clickable player names + player card */
 .player-link { cursor:pointer; text-decoration:underline; text-decoration-color:rgba(232,200,74,.4); text-underline-offset:2px; }
 .player-link:hover { color:var(--accent); }
@@ -903,7 +920,7 @@ body.modal-open { overflow:hidden; }
   <div class="tabs">
     <button class="tab active" data-tab="draft" onclick="showTab('draft')">Draft</button>
     <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
-    <button class="tab" data-tab="coach" onclick="showTab('coach')">Trade Calc</button>
+    <button class="tab" data-tab="coach" onclick="showTab('coach')">Trades</button>
     <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
     <button class="tab" data-tab="settings" onclick="showTab('settings')">Settings</button>
@@ -997,6 +1014,7 @@ function freshState() {
     tb:null,
     coachMode:'build',
     coachRoster:'',
+    tradeHistFilter:'',
     draftMode:'board',
     draftHistYear:null,
     activeTab:'draft',
@@ -3402,6 +3420,59 @@ function tradeCardHtml(tr, opts) {
   return html;
 }
 
+// Net trade value per team (person) across the whole dynasty, at current values.
+// Seeds every current team so all 8 appear even with zero trades. Sorted best net first.
+function tradeTeamStats(th, M) {
+  const net = {}, cnt = {};
+  const ensure = n => { if (!(n in net)) { net[n] = 0; cnt[n] = 0; } };
+  state.rosters.forEach(r => ensure(teamName(r.roster_id)));
+  th.trades.forEach(tr => {
+    tr.rosterIds.forEach(rid => {
+      const n = histName(th, tr.leagueId, rid);
+      ensure(n);
+      net[n] += histSide(tr, rid, th, false, M).total - histSent(tr, rid, th, false, M);
+      cnt[n] += 1;
+    });
+  });
+  return Object.keys(net)
+    .map(n => ({ name: n, net: net[n], count: cnt[n] }))
+    .sort((a, b) => b.net - a.net || b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function tradeLeaderboardHtml(stats, activeName) {
+  const fmt = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
+  let h = `<div class="section-label" style="margin-top:0;">Trade Leaderboard</div>`;
+  h += `<div class="coach-sub">Net value gained across every trade, at current values. #1 is the best trader, #${stats.length} the worst. Tap a team to filter the history below.</div>`;
+  h += `<div class="tlb">`;
+  stats.forEach((t, i) => {
+    const rank = i + 1;
+    const rcls = rank <= 3 ? ' r' + rank : '';
+    const netcls = t.count ? (t.net > 1 ? 'pos' : (t.net < -1 ? 'neg' : '')) : '';
+    const active = t.name === activeName ? ' active' : '';
+    h += `<div class="tlb-row${active}" onclick="tradeHistFilterClick('${escJs(t.name)}')">
+      <span class="tlb-rank${rcls}">${rank}</span>
+      <span class="tlb-name">${escHtml(t.name)}</span>
+      <span class="tlb-trades">${t.count} trade${t.count === 1 ? '' : 's'}</span>
+      <span class="tlb-net ${netcls}">${t.count ? fmt(t.net) : '—'}</span>
+    </div>`;
+  });
+  h += `</div>`;
+  return h;
+}
+
+function rerenderTradeHistory() {
+  const body = document.getElementById('coachBody');
+  if (body) body.innerHTML = tradeHistoryHtml();
+}
+function tradeHistFilterSet(name) {          // from the <select>: '' (all) or a team name
+  state.tradeHistFilter = name || '';
+  rerenderTradeHistory();
+}
+function tradeHistFilterClick(name) {        // from a leaderboard row: toggle on/off
+  state.tradeHistFilter = (state.tradeHistFilter === name) ? '' : name;
+  rerenderTradeHistory();
+}
+
 function tradeHistoryHtml() {
   const th = state.tradeHistory;
   if (!th || !th.trades.length) {
@@ -3409,11 +3480,34 @@ function tradeHistoryHtml() {
   }
 
   const M = buildValueModel();
-  let html = `<div class="section-label" style="margin-top:0;">Trade History</div>`;
-  html += `<div class="coach-sub">Every completed trade across your dynasty, graded with current values (${valueSourceLabel()}, hindsight). For trades with picks, reveal what they became.</div>`;
+  const filter = state.tradeHistFilter || '';
+  const stats = tradeTeamStats(th, M);
+
+  let html = tradeLeaderboardHtml(stats, filter);
+
+  // Filter-by-team control (All teams by default).
+  const names = stats.map(s => s.name).slice().sort((a, b) => a.localeCompare(b));
+  const opts = `<option value="">All teams</option>` +
+    names.map(n => `<option value="${escHtml(n)}" ${n === filter ? 'selected' : ''}>${escHtml(n)}</option>`).join('');
+  html += `<div class="section-label">Trade History</div>`;
+  html += `<div class="th-filter">
+      <span class="section-label" style="margin:0;">Filter by team</span>
+      <select class="year-select" onchange="tradeHistFilterSet(this.value)">${opts}</select>
+      ${filter ? `<button class="tb-add-btn" onclick="tradeHistFilterSet('')">Show all</button>` : ''}
+    </div>`;
+  html += `<div class="coach-sub">${filter ? ('Trades involving ' + escHtml(filter)) : 'Every completed trade across your dynasty'}, graded with current values (${valueSourceLabel()}, hindsight). For trades with picks, reveal what they became.</div>`;
+
+  const shown = filter
+    ? th.trades.filter(tr => tr.rosterIds.some(rid => histName(th, tr.leagueId, rid) === filter))
+    : th.trades;
+
+  if (!shown.length) {
+    html += `<div class="empty">No trades involving ${escHtml(filter)}.</div>`;
+    return html;
+  }
 
   let lastSeason = null;
-  th.trades.forEach(tr => {
+  shown.forEach(tr => {
     if (tr.season !== lastSeason) {
       html += `<div class="detail-title">${tr.season} Season</div>`;
       lastSeason = tr.season;
@@ -4139,6 +4233,11 @@ function escHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Escape a string for safe use inside a single-quoted JS string in an inline onclick.
+function escJs(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function renderNews() {
