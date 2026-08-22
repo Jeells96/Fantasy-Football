@@ -733,6 +733,8 @@ body.modal-open { overflow:hidden; }
   margin-top:4px;
 }
 .news-card[open] .news-headline { display:none; }
+.mt-row { display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; }
+.mt-nonews { color:var(--muted); font-style:italic; }
 .news-body { margin-top:10px; }
 .news-story {
   padding:10px 0;
@@ -941,7 +943,7 @@ body.modal-open { overflow:hidden; }
     <button class="tab active" data-tab="draft" onclick="showTab('draft')">Draft</button>
     <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
     <button class="tab" data-tab="coach" onclick="showTab('coach')">Trades</button>
-    <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
+    <button class="tab" data-tab="news" onclick="showTab('news')">My Team</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
   </div>
 </div>
@@ -1022,6 +1024,27 @@ function getStoredLeagueId() {
   }
 }
 
+const MY_TEAM_STORAGE_KEY = 'ff.myTeam';
+function getStoredMyTeam() {
+  try { return localStorage.getItem(MY_TEAM_STORAGE_KEY) || ''; } catch(e) { return ''; }
+}
+function setMyTeam(rid) {
+  state.myTeam = String(rid || '');
+  try { localStorage.setItem(MY_TEAM_STORAGE_KEY, state.myTeam); } catch(e) {}
+}
+// The roster that is "mine": a locally-saved choice, else the roster owned by the resolved
+// Sleeper user (JarenE), else a sensible fallback. Used to default the My Team tab, the
+// Team Analyzer, and the first team in the Trade Builder.
+function myRosterId() {
+  const has = rid => state.rosters.some(r => String(r.roster_id) === String(rid));
+  const stored = state.myTeam || getStoredMyTeam();
+  if (stored && has(stored)) return String(stored);
+  const byUser = state.myUserId && state.rosters.find(r => String(r.owner_id) === String(state.myUserId));
+  if (byUser) return String(byUser.roster_id);
+  const byName = state.rosters.find(r => teamName(r.roster_id) === 'Jaren');
+  return String(byName ? byName.roster_id : (state.rosters[0] ? state.rosters[0].roster_id : ''));
+}
+
 let state = {};
 
 function freshState() {
@@ -1035,6 +1058,8 @@ function freshState() {
     players:{},
     ownerMap:{},
     personByUserId:{},
+    myUserId:'',
+    myTeam:getStoredMyTeam(),
     userByRosterId:{},
     draftDetails:{},
     draftPicksBySeason:{},
@@ -1095,6 +1120,7 @@ async function resolveLeagueId() {
   try {
     const user = await fetchJSON(API + '/user/' + encodeURIComponent(SLEEPER_USERNAME));
     if (user && user.user_id) {
+      state.myUserId = String(user.user_id);
       const yr = Number(currentSeasonYear());
       let leagues = [];
       for (const season of [yr, yr - 1]) {   // current season, then last (offseason rollover)
@@ -2387,7 +2413,7 @@ function buildValueModel() {
   return { sf, baseValue, dynValue, startable, posRank: posRankOf };
 }
 
-const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th' };
+const ROUND_ORD = { 1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th', 6:'6th', 7:'7th' };
 
 // Maps a pick to its value. Prefers DynastyCalc's pick values (keyed either by exact overall
 // slot "2026 Pick 12", or by tier "2027 Early 1st Round"); falls back to FantasyCalc's naming
@@ -2429,10 +2455,12 @@ function pickValue(year, round, overall, numTeams) {
     if (generic != null) return generic;
   }
 
-  // Rounds beyond what's listed — decay from a known 4th.
-  const anchor = picks[year + ' Mid 4th Round'] || picks[year + ' 4th'] ||
-    picks['2028 Mid 4th Round'] || picks['2028 4th'] || 20;
-  return anchor * Math.pow(0.55, Math.max(1, round - 4));
+  // Rounds DynastyCalc doesn't list (6th+): decay from the 5th (already tiny) so a deeper
+  // pick is never worth more than a shallower one. Fall back to the 4th only if no 5th exists.
+  const a5 = picks[year + ' Mid 5th Round'] || picks['2028 Mid 5th Round'] || picks['2029 Mid 5th Round'];
+  if (a5 != null) return Math.max(1, Math.round(a5 * Math.pow(0.6, Math.max(1, round - 5))));
+  const a4 = picks[year + ' Mid 4th Round'] || picks[year + ' 4th'] || picks['2028 Mid 4th Round'] || 20;
+  return Math.max(1, Math.round(a4 * Math.pow(0.5, Math.max(1, round - 4))));
 }
 
 // Fetch DynastyCalc's pick values from its data chunk (the rankings page references it).
@@ -2996,6 +3024,9 @@ function ownerOfPlayer(pid) {
 function tbEnsureInit() {
   if (state.tb) return;
   state.tb = { teams: [], assets: [], search: '', pending: null };
+  // Start with my team as the first side; a searched player's team joins as the other side.
+  const mine = myRosterId();
+  if (mine) state.tb.teams.push(String(mine));
 }
 
 function tbRender() {
@@ -3040,9 +3071,12 @@ function tbHasPick(id) {
 // or more we ask which team receives it (a player can't be added twice).
 function tbPickPlayer(pid, from) {
   if (tbHasPlayer(pid)) return;
+  from = String(from || ownerOfPlayer(pid) || '');
+  // Search-to-start: pull the player's team into the trade if it isn't already in it.
+  if (from && state.tb.teams.indexOf(from) === -1) state.tb.teams.push(from);
   const parts = state.tb.teams;
   if (parts.length === 2) tbAddPlayer(pid, from, parts.find(t => t !== from) || parts[0]);
-  else { state.tb.pending = { kind:'player', pid:String(pid), from:String(from) }; tbRender(); }
+  else { state.tb.pending = { kind:'player', pid:String(pid), from:from }; tbRender(); }
 }
 function tbPickPick(from, id, label, via, value) {
   if (tbHasPick(id)) return;
@@ -3053,6 +3087,8 @@ function tbPickPick(from, id, label, via, value) {
 function tbChooseDest(to) {
   const pd = state.tb.pending;
   if (!pd) return;
+  to = String(to);
+  if (to && state.tb.teams.indexOf(to) === -1) state.tb.teams.push(to);  // bring in the receiving team if new
   state.tb.pending = null;
   if (pd.kind === 'player') tbAddPlayer(pd.pid, pd.from, to);
   else tbAddPick(pd.from, pd.id, pd.label, pd.via, pd.value, to);
@@ -3130,18 +3166,22 @@ function tradeBuilderHtml() {
   }
   html += `</div>`;
 
-  // Nothing to trade until at least two teams are chosen.
+  // With one team (yours, by default) you can still start: search a player and their team
+  // joins the trade automatically. Only bail out entirely if no team is present at all.
   if (parts.length < 2) {
-    html += `<div class="tb-verdict close">Pick the teams making this trade — add ${parts.length ? 'one more team' : 'two or more teams'} to start. You can build 2-team or multi-team deals.</div>`;
-    return html;
+    html += `<div class="tb-verdict close">${parts.length
+      ? 'Search a player below to trade for — their team joins the deal automatically — or add a second team above.'
+      : 'Add a team above, or search a player to start (their team joins the deal).'}</div>`;
   }
 
-  // Pending destination chooser (3+ team trades)
+  // Pending destination chooser. Normally the other participating teams; if the giver is the
+  // only team in the trade (e.g. adding your own player first), offer everyone else instead.
   if (tb.pending) {
     const label = tb.pending.kind === 'player' ? playerDisplayName(tb.pending.pid) : tb.pending.label;
+    const dests = parts.filter(t => t !== tb.pending.from);
+    const opts = dests.length ? dests : notIn;
     html += `<div class="tb-verdict close"><b>Send ${escHtml(label)} to:</b> ` +
-      parts.filter(t => t !== tb.pending.from).map(t =>
-        `<button class="tb-add-btn" onclick="tbChooseDest('${t}')">${teamName(t)}</button>`).join(' ') +
+      opts.map(t => `<button class="tb-add-btn" onclick="tbChooseDest('${t}')">${teamName(t)}</button>`).join(' ') +
       ` <button class="tb-remove" onclick="tbCancelPending()" title="Cancel">&times;</button></div>`;
   }
 
@@ -3296,8 +3336,7 @@ function tbAssetName(a) {
 /* ---------- coach: modal shell ---------- */
 
 function defaultCoachRoster() {
-  const mine = state.rosters.find(r => teamName(r.roster_id) === 'Jaren');
-  return String(mine ? mine.roster_id : (state.rosters[0] ? state.rosters[0].roster_id : ''));
+  return myRosterId();
 }
 
 // The Trade Calc tab: a mode toggle (Trade Builder / Team Analysis / Trade History) over
@@ -3312,9 +3351,10 @@ function renderCoachTab(rosterId, mode) {
   mode = mode || state.coachMode || 'build';
   state.coachMode = mode;
   if (rosterId !== undefined) state.coachRoster = (rosterId === '' ? '' : String(rosterId));
-  const sel = state.coachRoster || '';
+  // Team Analysis defaults to my team (still switchable to anyone).
+  const sel = state.coachRoster || (mode === 'analyze' ? myRosterId() : '');
 
-  const options = '<option value="">Choose a team…</option>' + state.rosters
+  const options = state.rosters
     .map(r => String(r.roster_id))
     .sort((a,b) => teamName(a).localeCompare(teamName(b)))
     .map(rid => `<option value="${rid}" ${rid === sel ? 'selected' : ''}>${teamName(rid)}</option>`)
@@ -4628,37 +4668,41 @@ function escJs(s) {
   return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
+// The "My Team" tab: your roster (with each player's latest news) plus your draft picks.
+// Which team is "yours" is saved locally and defaults to your Sleeper account's team; it
+// also drives the Team Analyzer and the first team in the Trade Builder.
 function renderNews() {
-  if (state.newsTeam == null) state.newsTeam = defaultCoachRoster();
-  const rid = String(state.newsTeam);
+  const rid = myRosterId();
 
   const options = state.rosters
     .map(r => String(r.roster_id))
     .sort((a,b) => teamName(a).localeCompare(teamName(b)))
-    .map(x => `<option value="${x}" ${x === rid ? 'selected' : ''}>${teamName(x)}</option>`)
+    .map(x => `<option value="${x}" ${String(x) === String(rid) ? 'selected' : ''}>${teamName(x)}</option>`)
     .join('');
 
   document.getElementById('mainContent').innerHTML = `
     <div class="year-selector">
-      <span class="section-label" style="margin:0;">Player News</span>
-      <select class="year-select" onchange="selectNewsTeam(this.value)">${options}</select>
+      <span class="section-label" style="margin:0;">My Team</span>
+      <select class="year-select" onchange="selectMyTeam(this.value)">${options}</select>
     </div>
-    <div class="coach-sub">Sleeper news in lineup order (starters first). Tap a player to expand older stories.</div>
-    <div id="newsArea">
-      <div class="status"><div class="spinner"></div><p>Loading player news...</p></div>
+    <div class="coach-sub">Your roster in lineup order with each player's latest news, plus your draft picks. Pick a different team above to set which one is yours (saved on this device).</div>
+    <div id="myTeamArea">
+      <div class="status"><div class="spinner"></div><p>Loading your team...</p></div>
     </div>
   `;
 
-  loadNews(rid);
+  loadMyTeam(rid);
 }
 
-function selectNewsTeam(rid) {
-  state.newsTeam = String(rid);
+// Selecting a team here sets "my team" everywhere (saved locally).
+function selectMyTeam(rid) {
+  setMyTeam(rid);
   renderNews();
 }
 
-async function loadNews(rid) {
+async function loadMyTeam(rid) {
   const s = state;
+  try { await loadValues(); } catch(e) {}
 
   if (!s.newsByTeam[rid]) {
     const roster = s.rosters.find(r => String(r.roster_id) === String(rid));
@@ -4730,40 +4774,59 @@ async function loadNews(rid) {
         });
       });
 
-      // One collapsible group per player, players in Sleeper lineup order.
-      const groups = Object.keys(byPid).map(pid => {
-        byPid[pid].sort((a,b) => b.published - a.published);
-        return { pid: pid, items: byPid[pid] };
-      });
-      groups.sort((a,b) => {
-        const oa = orderIdx[a.pid] == null ? 999 : orderIdx[a.pid];
-        const ob = orderIdx[b.pid] == null ? 999 : orderIdx[b.pid];
-        if (oa !== ob) return oa - ob;
-        return (b.items[0].published || 0) - (a.items[0].published || 0);
-      });
-      s.newsByTeam[rid] = { groups: groups };
+      Object.keys(byPid).forEach(pid => byPid[pid].sort((a,b) => b.published - a.published));
+      // Keep the full lineup-ordered roster so players WITHOUT news still show as roster rows.
+      s.newsByTeam[rid] = { byPid: byPid, ordered: ordered };
     } catch (e) {
-      s.newsByTeam[rid] = { error: e.message, groups: [] };
+      s.newsByTeam[rid] = { error: e.message, byPid: {}, ordered: [] };
     }
   }
 
-  if (s !== state || state.activeTab !== 'news' || String(state.newsTeam) !== String(rid)) return;
+  if (s !== state || state.activeTab !== 'news' || String(myRosterId()) !== String(rid)) return;
 
-  const target = document.getElementById('newsArea');
+  const target = document.getElementById('myTeamArea');
   if (!target) return;
 
   const data = s.newsByTeam[rid];
+  const M = buildValueModel();
 
+  // Draft picks section
+  const picks = coachPicks(rid);
+  let html = `<div class="detail-title" style="margin-top:0;">Draft Picks</div>`;
+  html += picks.length
+    ? `<div class="roster-list">` + picks.map(pk =>
+        `<div class="roster-row"><span><span class="pos-badge pos-pick">PICK</span> ${pk.label}${pk.via ? ` <span class="tb-meta">via ${escHtml(pk.via)}</span>` : ''}</span><span class="tb-val">${Math.round(pk.value).toLocaleString()}</span></div>`
+      ).join('') + `</div>`
+    : `<div class="empty">No tradeable draft picks.</div>`;
+
+  // Roster section — every player in lineup order; a news card if there's news, else a plain row.
+  html += `<div class="detail-title">Roster &amp; News</div>`;
   if (data.error) {
-    target.innerHTML = '<div class="error-msg">Could not load news: ' + data.error + '</div>';
-    return;
+    html += `<div class="error-msg">Could not load news: ${escHtml(data.error)}</div>`;
   }
-  if (!data.groups || !data.groups.length) {
-    target.innerHTML = '<div class="empty">No recent Sleeper news for this roster.</div>';
-    return;
+  const ordered = data.ordered || [];
+  if (!ordered.length) {
+    html += `<div class="empty">No roster players found.</div>`;
+  } else {
+    html += `<div class="list-stack">` + ordered.map(pid => {
+      const items = (data.byPid || {})[pid];
+      if (items && items.length) return newsGroupHtml({ pid: pid, items: items });
+      return myTeamPlayerRow(pid, M);
+    }).join('') + `</div>`;
   }
 
-  target.innerHTML = '<div class="list-stack">' + data.groups.map(newsGroupHtml).join('') + '</div>';
+  target.innerHTML = html;
+}
+
+// A roster player with no recent news: a compact row (position, name, dynasty value).
+function myTeamPlayerRow(pid, M) {
+  const p = state.players[String(pid)] || {};
+  const pos = p.position || '';
+  return `<div class="mt-row">
+    <span class="team-with-avatar">${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}<b>${pLink(pid)}</b>${playerInjuryTag(pid)}
+      <span class="tx-date">${escHtml([p.team, p.age ? 'Age ' + p.age : ''].filter(Boolean).join(' · '))}</span></span>
+    <span class="tx-date">${Math.round(M.dynValue(pid)).toLocaleString()} · <span class="mt-nonews">no recent news</span></span>
+  </div>`;
 }
 
 function newsDate(ts) {
