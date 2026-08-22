@@ -983,10 +983,22 @@ const NOTES_COLLECTION = 'leagueNotes';
 const TRADE_GRADES_COLLECTION = 'tradeGrades';
 const MAX_WEEKS = 18;
 
-// Maps each Sleeper team name (lowercased) to the real person. Include every
-// alternate team name a person has used across dynasty seasons, so trade history
-// and the leaderboard collapse to the 8 real owners instead of counting renames
-// as separate teams.
+// The bulletproof mapping: each person keyed by their STABLE Sleeper user id. A user id
+// never changes, so no team rename can ever combine or split people. This is the primary
+// source of truth for who a roster belongs to.
+const REAL_NAME_BY_USER_ID = {
+  '1039993023658221568': 'Jaren',   // JarenE
+  '499746762370576384':  'Dakota',  // Dakota95
+  '1008927999934185472': 'Ryder',   // RyderEells23
+  '1040359416794697728': 'Reese',   // RFizzle92
+  '1040374877913567232': 'Linn',    // Linnerd728
+  '1040421815778238464': 'Duke',    // DJC90
+  '1181756414651662336': 'Dylan',   // DylanK05
+  '1184203934121218048': 'Ross'     // Toelobe
+};
+
+// Fallback for anyone not in the user-id map (e.g. a future new member): maps a Sleeper
+// team name (lowercased) to the real person. Used only when the user id isn't recognized.
 const REAL_NAME_BY_SLEEPER_TEAM = {
   'nacua matada': 'Jaren',
   'ross': 'Ross',
@@ -995,11 +1007,11 @@ const REAL_NAME_BY_SLEEPER_TEAM = {
   'pierce my penix': 'Linn',
   'darnell mooned me': 'Ryder',
   'they hit the second bower': 'Reese',
+  'gibbs/bijan pound patrol': 'Reese',
   'to infinity and bijan': 'Duke',
   'unsolicited nix pics': 'Duke',
   'unsolicited nix pix': 'Duke',
-  'njigbas in paris': 'Dylan',
-  'gibbs/bijan pound patrol': 'Dylan'
+  'njigbas in paris': 'Dylan'
 };
 
 function getStoredLeagueId() {
@@ -1159,11 +1171,11 @@ async function init() {
     s.rosters.forEach(r => {
       const u = userById[r.owner_id];
       const sleeperTeamName = getSleeperTeamName(u, r.roster_id);
-      const realName = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
+      // Stable user id first (rename-proof), then the team-name alias, then the raw name.
+      const realName = REAL_NAME_BY_USER_ID[String(r.owner_id)] ||
+        REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
       s.ownerMap[String(r.roster_id)] = realName;
       s.userByRosterId[String(r.roster_id)] = u || null;
-      // Keyed by the STABLE Sleeper user id, so a team rename in any season still routes
-      // back to the same person (the team-name alias table just prettifies the label).
       if (r.owner_id) s.personByUserId[String(r.owner_id)] = realName;
     });
 
@@ -3402,9 +3414,8 @@ async function loadTradeHistory() {
     (rosters || []).forEach(r => {
       const u = ubyid[r.owner_id];
       const tn = getSleeperTeamName(u, r.roster_id);
-      // Prefer the stable user-id -> person mapping (survives renames); fall back to the
-      // team-name alias table, then the raw team name.
-      const byUser = r.owner_id && state.personByUserId[String(r.owner_id)];
+      // Stable user id first (survives renames), then team-name alias, then the raw name.
+      const byUser = r.owner_id && (REAL_NAME_BY_USER_ID[String(r.owner_id)] || state.personByUserId[String(r.owner_id)]);
       nm[String(r.roster_id)] = byUser || REAL_NAME_BY_SLEEPER_TEAM[normalizeName(tn)] || tn;
       if (r.owner_id) owners[String(r.roster_id)] = String(r.owner_id);
     });
@@ -3465,7 +3476,10 @@ async function loadTradeHistory() {
 // Sleeper user id first (survives team renames across seasons), then the name mapping.
 function histName(th, leagueId, rid) {
   const owner = th.ownerByLeague && th.ownerByLeague[leagueId] && th.ownerByLeague[leagueId][String(rid)];
-  if (owner && state.personByUserId[owner]) return state.personByUserId[owner];
+  if (owner) {
+    if (REAL_NAME_BY_USER_ID[owner]) return REAL_NAME_BY_USER_ID[owner];
+    if (state.personByUserId[owner]) return state.personByUserId[owner];
+  }
   const nm = th.nameByLeague[leagueId];
   return (nm && nm[String(rid)]) || teamName(rid);
 }
@@ -3715,9 +3729,12 @@ function tradeCardHtml(tr, opts) {
   const winner = (!pending && data.winnerRid) ? sides.find(s => String(s.rid) === String(data.winnerRid)) : null;
   const wonBy = data.wonBy || 0;
 
+  // Resolve names live (by roster id) so person/name fixes apply even to already-frozen
+  // cards; the frozen snapshot's stored name is only a fallback.
+  const nameOf = s => histName(th, tr.leagueId, s.rid) || s.name;
   const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
-  const matchup = sides.map(s => escHtml(s.name)).join(' <span class="tx-x">&#8644;</span> ');
-  const winPill = winner ? `<span class="tx-winner">${escHtml(winner.name)} +${Math.round(wonBy * 100)}%</span>` : '';
+  const matchup = sides.map(s => escHtml(nameOf(s))).join(' <span class="tx-x">&#8644;</span> ');
+  const winPill = winner ? `<span class="tx-winner">${escHtml(nameOf(winner))} +${Math.round(wonBy * 100)}%</span>` : '';
   const statusBadge = frozen
     ? `<span class="tx-badge frozen" title="Grade locked at trade value — won't change">Final</span>`
     : (pending ? `<span class="tx-badge pending" title="Locks once the traded pick is drafted">Pending</span>` : '');
@@ -3735,7 +3752,7 @@ function tradeCardHtml(tr, opts) {
   sides.forEach(s => {
     const win = winner && String(winner.rid) === String(s.rid);
     html += `<div class="th-side">
-      <div class="th-side-name">${escHtml(s.name)}${win ? ' <span class="th-w">W</span>' : ''}</div>
+      <div class="th-side-name">${escHtml(nameOf(s))}${win ? ' <span class="th-w">W</span>' : ''}</div>
       ${(s.items || []).map(it => {
         const nameHtml = it.pid ? pLink(it.pid) : escHtml(it.label);
         const rowCls = (hl && String(it.pid) === hl) ? ' pc-hl' : '';
