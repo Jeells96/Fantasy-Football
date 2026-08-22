@@ -685,6 +685,7 @@ body.modal-open { overflow:hidden; }
 .lr-toggle input { width:16px; height:16px; accent-color:var(--accent); }
 .lr-nlabel { display:inline-flex; align-items:center; gap:8px; font-size:.82rem; color:var(--muted); }
 .lr-nin { width:56px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 8px; font-family:'DM Mono',monospace; }
+.lr-focus { background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 8px; font-size:.85rem; }
 .lr-cat { border:1px solid var(--border); border-radius:10px; background:var(--card); margin-bottom:8px; overflow:hidden; }
 .lr-cat-sum { display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; list-style:none; }
 .lr-cat-sum::-webkit-details-marker { display:none; }
@@ -1098,6 +1099,7 @@ function freshState() {
     myTeam:getStoredMyTeam(),
     alBench:(function(){ try { return localStorage.getItem('ff.alBench') === '1'; } catch(e) { return false; } })(),
     alBenchN:(function(){ try { return parseInt(localStorage.getItem('ff.alBenchN'), 10) || 1; } catch(e) { return 1; } })(),
+    alFocus:(function(){ try { return localStorage.getItem('ff.alFocus') || ''; } catch(e) { return ''; } })(),
     userByRosterId:{},
     draftDetails:{},
     draftPicksBySeason:{},
@@ -2711,31 +2713,36 @@ function leagueSlots(M) {
   };
 }
 
-// The players counted for a team+category, listed with their production values.
+// The players counted for a team+category, listed with their full (blended) rating.
 function lrPlayerList(pids, M) {
-  const rows = (pids || []).slice().sort((a,b) => M.baseValue(b) - M.baseValue(a)).map(pid => {
+  const rows = (pids || []).slice().sort((a,b) => M.dynValue(b) - M.dynValue(a)).map(pid => {
     const p = state.players[String(pid)] || {};
     const pos = p.position || '';
-    return `<div class="lr-prow"><span>${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}${pLink(pid)}</span><span class="tb-val">${Math.round(M.baseValue(pid)).toLocaleString()}</span></div>`;
+    return `<div class="lr-prow"><span>${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}${pLink(pid)}</span><span class="tb-val">${Math.round(M.dynValue(pid)).toLocaleString()}</span></div>`;
   }).join('');
   return `<div class="lr-players">${rows || '<div class="tb-meta">—</div>'}</div>`;
 }
 
-// One collapsible category. rows = [{rid, value, pids}]. Collapsed by default; each team row
-// expands to the players counted in that rating.
-function lrCategoryHtml(title, rows, myRid, M) {
+// One collapsible category. rows = [{rid, value, pids}]. Collapsed by default; the header shows
+// the FOCUS team's place + grade; each team row expands to the players counted.
+function lrCategoryHtml(title, rows, focusRid, M) {
   const sorted = rows.slice().sort((a,b) => b.value - a.value);
-  const avg = sorted.length ? sorted.reduce((s,x) => s + x.value, 0) / sorted.length : 0;
-  const leader = sorted[0];
-  const leadGrade = leader ? leagueGrade(leader.value, avg) : '';
+  const n = sorted.length;
+  const avg = n ? sorted.reduce((s,x) => s + x.value, 0) / n : 0;
+  const fi = sorted.findIndex(x => String(x.rid) === String(focusRid));
+  let leadHtml = '';
+  if (fi >= 0) {
+    const fg = leagueGrade(sorted[fi].value, avg);
+    leadHtml = `<span class="lr-cat-lead">${escHtml(teamName(focusRid))} · #${fi + 1}/${n} · <span class="tb-grade ${tbGradeClass(fg)}">${fg}</span></span>`;
+  }
   let h = `<details class="lr-cat"><summary class="lr-cat-sum">
       <span class="lr-cat-title">${escHtml(title)}</span>
-      <span class="lr-cat-lead">${leader ? escHtml(teamName(leader.rid)) + ' ' : ''}<span class="tb-grade ${tbGradeClass(leadGrade)}">${leadGrade}</span></span>
+      ${leadHtml}
     </summary><div class="lr-list">`;
   sorted.forEach((row, i) => {
     const grade = leagueGrade(row.value, avg);
     const rcls = i < 3 ? ' r' + (i + 1) : '';
-    const me = String(row.rid) === String(myRid) ? ' me' : '';
+    const me = String(row.rid) === String(focusRid) ? ' me' : '';
     h += `<details class="lr-rowd"><summary class="lr-row${me}">
       <span class="lr-rank${rcls}">${i + 1}</span>
       <span class="lr-name">${escHtml(teamName(row.rid))}</span>
@@ -2752,9 +2759,14 @@ function alSetBench(on) {
   alRerender();
 }
 function alSetBenchN(n) {
-  n = Math.max(0, Math.min(10, parseInt(n, 10) || 0));
+  n = Math.max(0, Math.min(15, parseInt(n, 10) || 0));
   state.alBenchN = n;
   try { localStorage.setItem('ff.alBenchN', String(n)); } catch(e) {}
+  alRerender();
+}
+function alSetFocus(rid) {
+  state.alFocus = String(rid || '');
+  try { localStorage.setItem('ff.alFocus', state.alFocus); } catch(e) {}
   alRerender();
 }
 function alRerender() {
@@ -2770,33 +2782,56 @@ function leagueReport(myRid) {
   const slots = leagueSlots(M);
   const POS = ['QB','RB','WR','TE'];
   const benchN = state.alBench ? (state.alBenchN || 0) : 0;
+  // Which team's placement the collapsed headers show (default: my team). Saved locally.
+  const focusRid = (state.alFocus && state.rosters.some(r => String(r.roster_id) === String(state.alFocus)))
+    ? String(state.alFocus) : String(myRid);
 
   const teams = state.rosters.map(r => {
     const rid = String(r.roster_id);
+    const players = ((r.players) || []).map(String).filter(pid => POS.indexOf(playerPositionOf(pid)) !== -1);
     const byPos = {}; POS.forEach(p => byPos[p] = []);
-    ((r.players) || []).map(String).forEach(pid => { const pos = playerPositionOf(pid); if (byPos[pos]) byPos[pos].push(pid); });
-    POS.forEach(p => byPos[p].sort((a,b) => M.baseValue(b) - M.baseValue(a)));
-    const pool = {}, posVal = {}; let overallPids = [];
+    players.forEach(pid => byPos[playerPositionOf(pid)].push(pid));
+    POS.forEach(p => byPos[p].sort((a,b) => M.dynValue(b) - M.dynValue(a)));
+
+    // Per-position categories: that position's starters + its top N backups.
+    const pool = {}, posVal = {};
+    const starterSet = {};
     POS.forEach(p => {
+      byPos[p].slice(0, slots[p]).forEach(pid => starterSet[pid] = 1);
       pool[p] = byPos[p].slice(0, slots[p] + benchN);
-      posVal[p] = pool[p].reduce((s,pid) => s + M.baseValue(pid), 0);
-      overallPids = overallPids.concat(pool[p]);
+      posVal[p] = pool[p].reduce((s,pid) => s + M.dynValue(pid), 0);
     });
-    return { rid, pool, posVal, overall: POS.reduce((s,p) => s + posVal[p], 0), overallPids };
+
+    // Overall roster: all starters + the top N bench players TOTAL (across positions),
+    // each at their full rating (no backup discount).
+    const starterPids = Object.keys(starterSet);
+    const benchPids = players.filter(pid => !starterSet[pid])
+      .sort((a,b) => M.dynValue(b) - M.dynValue(a)).slice(0, benchN);
+    const overallPids = starterPids.concat(benchPids);
+    const overall = overallPids.reduce((s,pid) => s + M.dynValue(pid), 0);
+
+    return { rid, pool, posVal, overall, overallPids };
   });
 
   if (!teams.length) return '<div class="empty">No teams found.</div>';
 
-  const depthNote = benchN ? `starters + top ${benchN} backup${benchN > 1 ? 's' : ''} per position` : 'starters only';
-  let html = `<div class="coach-sub">How all ${teams.length} teams rank, by overall roster and by position (${depthNote}). Grades are vs the league average; your team is highlighted. Tap a category to open it, and a team to see who's counted.</div>`;
+  const depthNote = benchN
+    ? `starters + top ${benchN} bench player${benchN > 1 ? 's' : ''} (overall; ${benchN} per position)`
+    : 'starters only';
+  const teamOpts = state.rosters.map(r => String(r.roster_id))
+    .sort((a,b) => teamName(a).localeCompare(teamName(b)))
+    .map(rid => `<option value="${rid}" ${rid === focusRid ? 'selected' : ''}>${teamName(rid)}</option>`).join('');
+
+  let html = `<div class="coach-sub">How all ${teams.length} teams rank, by overall roster and by position (${depthNote}), using each player's full rating. Grades are vs the league average. Tap a category to open it, and a team to see who's counted.</div>`;
   html += `<div class="lr-controls">
+      <label class="lr-nlabel">Show ranking for <select class="lr-focus" onchange="alSetFocus(this.value)">${teamOpts}</select></label>
       <label class="lr-toggle"><input type="checkbox" ${state.alBench ? 'checked' : ''} onchange="alSetBench(this.checked)"> Include bench depth</label>
-      ${state.alBench ? `<label class="lr-nlabel">Backups / position <input class="lr-nin" type="number" min="0" max="10" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
+      ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" max="15" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
     </div>`;
 
-  html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, pids: t.overallPids })), myRid, M);
+  html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, pids: t.overallPids })), focusRid, M);
   POS.forEach(p => {
-    html += lrCategoryHtml(p, teams.map(t => ({ rid: t.rid, value: t.posVal[p], pids: t.pool[p] })), myRid, M);
+    html += lrCategoryHtml(p, teams.map(t => ({ rid: t.rid, value: t.posVal[p], pids: t.pool[p] })), focusRid, M);
   });
   return html;
 }
@@ -3197,17 +3232,28 @@ function tbRender() {
   const body = document.getElementById('coachBody');
   if (!body) return;
 
-  // Preserve the page scroll position across the re-render so adding/removing an asset
-  // doesn't jump the view back to the top.
+  // Keep the view from jumping when adding/removing an asset. Anchoring to the search box
+  // (the user's action point) is robust even when the content height changes — e.g. adding
+  // from search clears the results, which shrinks the page and would otherwise clamp scroll
+  // back to the top if we just restored the old scrollY.
+  const anchor = document.getElementById('tbSearchInput');
+  const anchorTop = anchor ? anchor.getBoundingClientRect().top : null;
   const y = window.scrollY;
-  const searchFocused = document.activeElement && document.activeElement.id === 'tbSearchInput';
+  const searchFocused = anchor && document.activeElement === anchor;
+
   body.innerHTML = tradeBuilderHtml();
 
   if (searchFocused) {
     const inp = document.getElementById('tbSearchInput');
     if (inp) { inp.focus({ preventScroll: true }); inp.selectionStart = inp.selectionEnd = inp.value.length; }
   }
-  window.scrollTo(0, y);
+  const newAnchor = document.getElementById('tbSearchInput');
+  if (anchorTop != null && newAnchor) {
+    const delta = newAnchor.getBoundingClientRect().top - anchorTop;
+    window.scrollTo(0, Math.max(0, window.scrollY + delta));
+  } else {
+    window.scrollTo(0, y);
+  }
 }
 
 function tbAddTeam(rid) {
