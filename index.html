@@ -857,14 +857,14 @@ body.modal-open { overflow:hidden; }
 .tlb-rank.r1 { background:var(--accent); color:#000; border-color:var(--accent); }
 .tlb-rank.r2 { background:#c8ccd8; color:#000; border-color:#c8ccd8; }
 .tlb-rank.r3 { background:#cd8a54; color:#000; border-color:#cd8a54; }
-.tlb-name { font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tlb-trades { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--muted); flex:none; }
-.tlb-net { font-family:'DM Mono',monospace; font-size:.85rem; min-width:64px; text-align:right; flex:none; color:var(--muted); }
+.tlb-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.tlb-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tlb-trades { font-family:'DM Mono',monospace; font-size:.66rem; color:var(--muted); }
+.tlb-net { font-family:'DM Mono',monospace; font-size:.9rem; min-width:64px; text-align:right; flex:none; color:var(--muted); }
 .tlb-net.pos { color:var(--green); }
 .tlb-net.neg { color:var(--danger); }
 .th-filter { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
 .tlb-pend { color:var(--accent); }
-@media (max-width:560px){ .tlb-trades { display:none; } }
 
 /* frozen / pending trade states */
 .tx-badge.frozen { color:var(--green); border-color:rgba(74,232,160,.45); }
@@ -990,6 +990,7 @@ const REAL_NAME_BY_SLEEPER_TEAM = {
   'darnell mooned me': 'Ryder',
   'they hit the second bower': 'Reese',
   'to infinity and bijan': 'Duke',
+  'unsolicited nix pics': 'Duke',
   'unsolicited nix pix': 'Duke',
   'njigbas in paris': 'Dylan',
   'gibbs/bijan pound patrol': 'Dylan'
@@ -2417,24 +2418,26 @@ function parseDcPicks(chunk, tc, valKey) {
 
 /* ---------- Value Adjustment (KeepTradeCut-style consolidation/stud premium) ----------
    Raw addition says "a pile of picks = one stud" — but one elite player takes a single
-   roster spot and is far harder to acquire. So we credit the side receiving the fewer,
-   more elite pieces. The bonus scales with the top asset's "stud factor" and how many
-   fewer pieces that side takes back. It updates live as pieces are added to either side. */
-const VA_EXPLAIN = "Value Adjustment\n\nTrading is more than simple addition. We add value to the side receiving the fewer, more elite pieces — because one stud takes a single roster spot and is far harder to acquire than a pile of picks. This counters calculators that call 12 late picks a fair deal for a superstar. It updates as players are added to either side.";
+   roster spot and is far harder to acquire. So we credit the side that CONSOLIDATES: gives
+   up more pieces than it takes back. A 1-for-1 (or any even piece count) gets no premium.
+   Calibrated to KTC: their Amon-Ra example is +2,783 at gap 2 and +4,289 at gap 3, i.e.
+   ≈ 0.175 × value × gap. It updates live as pieces are added to either side. */
+const VA_EXPLAIN = "Value Adjustment\n\nTrading is more than simple addition. We add value to the side that gives up more pieces than it gets back — because consolidating into one stud uses a single roster spot and is far harder to acquire than a pile of picks. A 1-for-1 swap gets no adjustment. This counters calculators that call 12 late picks a fair deal for a superstar, and updates as players are added to either side.";
 const VA_STUD_FLOOR = 3000;   // below this, a player is a role piece (no premium)
 const VA_STUD_CEIL = 8000;    // at/above this, fully "elite" on our blended scale
-const VA_RATE = 0.15;         // premium per extra piece the other side takes
-const VA_GAP_CAP = 5;
+const VA_RATE = 0.175;        // premium per net piece consolidated (matches KTC's examples)
+const VA_GAP_CAP = 6;
 
 function vaStudWeight(v) {
   return Math.max(0, Math.min(1, (v - VA_STUD_FLOOR) / (VA_STUD_CEIL - VA_STUD_FLOOR)));
 }
-// Premium credited to a side, given the assets it receives and the largest piece-count
-// among the other side(s). Elite + fewer pieces => bigger adjustment.
-function valueAdjustment(receivedValues, maxOtherPieces) {
+// Premium credited to a side that consolidates: gap = (pieces it GAVE) − (pieces it GOT).
+// Zero for a 1-for-1 or a side taking back more pieces than it sends. Scales with the top
+// asset received (its "stud factor") so consolidating into an elite is worth the most.
+function valueAdjustment(receivedValues, piecesGiven) {
   if (!receivedValues.length) return 0;
   const top = Math.max.apply(null, receivedValues);
-  const gap = Math.max(0, maxOtherPieces - receivedValues.length);
+  const gap = Math.max(0, (piecesGiven || 0) - receivedValues.length);
   return Math.round(top * vaStudWeight(top) * VA_RATE * Math.min(gap, VA_GAP_CAP));
 }
 
@@ -3095,13 +3098,12 @@ function tradeBuilderHtml() {
 
   // RESULT / evaluator
   if (tb.assets.length) {
-    // Value Adjustment: credit the side taking back the fewer, more elite pieces.
-    const pieces = {}; parts.forEach(t => pieces[t] = tb.assets.filter(a => a.to === t).length);
+    // Value Adjustment: credit the side that consolidates (gives more pieces than it gets).
+    const givenPieces = {}; parts.forEach(t => givenPieces[t] = tb.assets.filter(a => a.from === t).length);
     const adj = {}; const recvEff = {};
     parts.forEach(t => {
       const vals = tb.assets.filter(a => a.to === t).map(assetVal);
-      const maxOther = Math.max(0, ...parts.filter(x => x !== t).map(x => pieces[x]));
-      adj[t] = valueAdjustment(vals, maxOther);
+      adj[t] = valueAdjustment(vals, givenPieces[t]);
       recvEff[t] = recv[t] + adj[t];
     });
 
@@ -3509,18 +3511,17 @@ function tradePending(tr, th) {
 // plain object that can be rendered live OR persisted as a frozen snapshot.
 function computeTradeSides(tr, becameMode, M, th) {
   th = th || state.tradeHistory;
-  const raw = tr.rosterIds.map(rid => {
+  const sides = tr.rosterIds.map(rid => {
     const got = histSide(tr, rid, th, becameMode, M);
     const sent = histSent(tr, rid, th, becameMode, M);
+    // pieces this side gave away: players dropped + picks sent
+    const sentPieces = Object.keys(tr.drops).filter(pid => String(tr.drops[pid]) === String(rid)).length +
+      (tr.draft_picks || []).filter(p => String(p.previous_owner_id) === String(rid)).length;
+    const adj = valueAdjustment(got.items.map(it => it.value), sentPieces);
+    const net = (got.total + adj) - sent;
     return { rid: String(rid), name: histName(th, tr.leagueId, rid),
-      items: got.items, total: got.total, sent: sent, pieces: got.items.length };
-  });
-  const sides = raw.map(s => {
-    const maxOther = Math.max(0, ...raw.filter(x => x !== s).map(x => x.pieces));
-    const adj = valueAdjustment(s.items.map(it => it.value), maxOther);
-    const net = (s.total + adj) - s.sent;
-    return { rid: s.rid, name: s.name, items: s.items, total: s.total, sent: s.sent,
-      adj: adj, net: net, ownPct: net / Math.max(s.total + adj, s.sent, 1) };
+      items: got.items, total: got.total, sent: sent, adj: adj, net: net,
+      ownPct: net / Math.max(got.total + adj, sent, 1) };
   });
   const totalRecv = sides.reduce((a,x) => a + x.total + x.adj, 0) || 1;
   const best = sides.slice().sort((a,b) => b.net - a.net)[0];
@@ -3707,11 +3708,13 @@ function tradeLeaderboardHtml(stats, activeName) {
     const rcls = rank <= 3 ? ' r' + rank : '';
     const netcls = t.count ? (t.net > 1 ? 'pos' : (t.net < -1 ? 'neg' : '')) : '';
     const active = t.name === activeName ? ' active' : '';
-    const pendTxt = t.pending ? ` <span class="tlb-pend">+${t.pending} pending</span>` : '';
+    const pendTxt = t.pending ? ` · <span class="tlb-pend">${t.pending} pending</span>` : '';
     h += `<div class="tlb-row${active}" onclick="tradeHistFilterClick('${escJs(t.name)}')">
       <span class="tlb-rank${rcls}">${rank}</span>
-      <span class="tlb-name">${escHtml(t.name)}</span>
-      <span class="tlb-trades">${t.count} final${pendTxt}</span>
+      <div class="tlb-main">
+        <span class="tlb-name">${escHtml(t.name)}</span>
+        <span class="tlb-trades">${t.count} final${pendTxt}</span>
+      </div>
       <span class="tlb-net ${netcls}">${t.count ? fmt(t.net) : '—'}</span>
     </div>`;
   });
