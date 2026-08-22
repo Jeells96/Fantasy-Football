@@ -794,6 +794,10 @@ body.modal-open { overflow:hidden; }
 .tb-side-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 @media (max-width:560px){ .tb-side-cols { grid-template-columns:1fr; } }
 .tb-colhead { display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:.72rem; margin-bottom:6px; }
+.tb-adj { background:rgba(232,200,74,.08); border-color:rgba(232,200,74,.35); color:var(--accent); }
+.tb-adj .tb-val { color:var(--accent); }
+.va-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid currentColor; font-size:.6rem; margin-left:4px; cursor:pointer; opacity:.8; }
+.tb-even-hint { margin-top:12px; padding:10px 12px; background:rgba(74,157,232,.1); border:1px solid rgba(74,157,232,.3); border-radius:8px; font-size:.85rem; color:var(--text); }
 
 /* column selector */
 .tb-search-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; margin:10px 0 4px; }
@@ -2355,15 +2359,46 @@ function pickValue(year, round, overall, numTeams) {
   return anchor * Math.pow(0.5, Math.max(1, round - 4));
 }
 
+/* ---------- Value Adjustment (KeepTradeCut-style consolidation/stud premium) ----------
+   Raw addition says "a pile of picks = one stud" — but one elite player takes a single
+   roster spot and is far harder to acquire. So we credit the side receiving the fewer,
+   more elite pieces. The bonus scales with the top asset's "stud factor" and how many
+   fewer pieces that side takes back. It updates live as pieces are added to either side. */
+const VA_EXPLAIN = "Value Adjustment\n\nTrading is more than simple addition. We add value to the side receiving the fewer, more elite pieces — because one stud takes a single roster spot and is far harder to acquire than a pile of picks. This counters calculators that call 12 late picks a fair deal for a superstar. It updates as players are added to either side.";
+const VA_STUD_FLOOR = 3000;   // below this, a player is a role piece (no premium)
+const VA_STUD_CEIL = 8000;    // at/above this, fully "elite" on our blended scale
+const VA_RATE = 0.15;         // premium per extra piece the other side takes
+const VA_GAP_CAP = 5;
+
+function vaStudWeight(v) {
+  return Math.max(0, Math.min(1, (v - VA_STUD_FLOOR) / (VA_STUD_CEIL - VA_STUD_FLOOR)));
+}
+// Premium credited to a side, given the assets it receives and the largest piece-count
+// among the other side(s). Elite + fewer pieces => bigger adjustment.
+function valueAdjustment(receivedValues, maxOtherPieces) {
+  if (!receivedValues.length) return 0;
+  const top = Math.max.apply(null, receivedValues);
+  const gap = Math.max(0, maxOtherPieces - receivedValues.length);
+  return Math.round(top * vaStudWeight(top) * VA_RATE * Math.min(gap, VA_GAP_CAP));
+}
+
 function coachPicks(rosterId) {
   const nt = state.rosters.length || 12;
-  return getAllOwnedPicks(rosterId).map(p => ({
-    label: p.exactSlot ? (p.year + ' ' + p.exactSlot) : (p.year + ' R' + p.round),
-    year: p.year,
-    round: p.round,
-    overall: p.overall,
-    value: pickValue(p.year, p.round, p.overall, nt)
-  })).sort((a,b) => b.value - a.value);
+  return getAllOwnedPicks(rosterId).map(p => {
+    const ord = ROUND_ORD[p.round];
+    const base = p.exactSlot ? (p.year + ' ' + p.exactSlot) : (p.year + ' ' + (ord || ('R' + p.round)));
+    // Multiple identical future picks (e.g. two 2027 1sts) are distinguished by their
+    // original team, and get a unique id so each can be added to a trade independently.
+    return {
+      id: p.year + '|' + p.round + '|' + p.originalRosterId,
+      label: base,
+      via: String(p.originalRosterId) !== String(rosterId) ? p.origName : '',
+      year: p.year,
+      round: p.round,
+      overall: p.overall,
+      value: pickValue(p.year, p.round, p.overall, nt)
+    };
+  }).sort((a,b) => b.value - a.value);
 }
 
 function optimalLineup(playerIds, M) {
@@ -2889,8 +2924,8 @@ function tbSetSearch(v) { state.tb.search = v; tbRender(); }
 function tbHasPlayer(pid) {
   return state.tb.assets.some(a => a.kind === 'player' && a.pid === String(pid));
 }
-function tbHasPick(from, label) {
-  return state.tb.assets.some(a => a.kind === 'pick' && a.from === String(from) && a.label === label);
+function tbHasPick(id) {
+  return state.tb.assets.some(a => a.kind === 'pick' && a.pickId === id);
 }
 
 // Clicking an asset: with two teams the destination is simply the other team; with three
@@ -2901,18 +2936,18 @@ function tbPickPlayer(pid, from) {
   if (parts.length === 2) tbAddPlayer(pid, from, parts.find(t => t !== from) || parts[0]);
   else { state.tb.pending = { kind:'player', pid:String(pid), from:String(from) }; tbRender(); }
 }
-function tbPickPick(from, label, value) {
-  if (tbHasPick(from, label)) return;
+function tbPickPick(from, id, label, via, value) {
+  if (tbHasPick(id)) return;
   const parts = state.tb.teams;
-  if (parts.length === 2) tbAddPick(from, label, value, parts.find(t => t !== from) || parts[0]);
-  else { state.tb.pending = { kind:'pick', from:String(from), label:label, value:Number(value) }; tbRender(); }
+  if (parts.length === 2) tbAddPick(from, id, label, via, value, parts.find(t => t !== from) || parts[0]);
+  else { state.tb.pending = { kind:'pick', from:String(from), id:id, label:label, via:via, value:Number(value) }; tbRender(); }
 }
 function tbChooseDest(to) {
   const pd = state.tb.pending;
   if (!pd) return;
   state.tb.pending = null;
   if (pd.kind === 'player') tbAddPlayer(pd.pid, pd.from, to);
-  else tbAddPick(pd.from, pd.label, pd.value, to);
+  else tbAddPick(pd.from, pd.id, pd.label, pd.via, pd.value, to);
 }
 function tbCancelPending() { state.tb.pending = null; tbRender(); }
 
@@ -2921,9 +2956,9 @@ function tbAddPlayer(pid, from, to) {
   state.tb.assets.push({ kind:'player', pid:String(pid), from:String(from || ''), to:String(to) });
   tbRender();
 }
-function tbAddPick(from, label, value, to) {
-  if (!to || tbHasPick(from, label)) { tbRender(); return; }
-  state.tb.assets.push({ kind:'pick', label:label, value:Number(value) || 0, from:String(from), to:String(to) });
+function tbAddPick(from, id, label, via, value, to) {
+  if (!to || tbHasPick(id)) { tbRender(); return; }
+  state.tb.assets.push({ kind:'pick', pickId:id, label:label, via:via || '', value:Number(value) || 0, from:String(from), to:String(to) });
   tbRender();
 }
 function tbRemoveAsset(i) { state.tb.assets.splice(i, 1); tbRender(); }
@@ -3004,18 +3039,38 @@ function tradeBuilderHtml() {
 
   // RESULT / evaluator
   if (tb.assets.length) {
+    // Value Adjustment: credit the side taking back the fewer, more elite pieces.
+    const pieces = {}; parts.forEach(t => pieces[t] = tb.assets.filter(a => a.to === t).length);
+    const adj = {}; const recvEff = {};
+    parts.forEach(t => {
+      const vals = tb.assets.filter(a => a.to === t).map(assetVal);
+      const maxOther = Math.max(0, ...parts.filter(x => x !== t).map(x => pieces[x]));
+      adj[t] = valueAdjustment(vals, maxOther);
+      recvEff[t] = recv[t] + adj[t];
+    });
+
     const sides = parts.map(t => {
-      const netPct = (recv[t] >= give[t])
-        ? (give[t] > 0 ? (recv[t] - give[t]) / Math.max(recv[t], give[t]) : (recv[t] > 0 ? 1 : 0))
-        : (recv[t] - give[t]) / Math.max(recv[t], give[t], 1);
+      // 2-team: compare the two effective "gets" totals directly (symmetric). Multi-team:
+      // effective received vs raw given.
+      let netPct;
+      if (parts.length === 2) {
+        const o = parts.find(x => x !== t);
+        netPct = (recvEff[t] - recvEff[o]) / Math.max(recvEff[t], recvEff[o], 1);
+      } else {
+        netPct = (recvEff[t] >= give[t])
+          ? (give[t] > 0 ? (recvEff[t] - give[t]) / Math.max(recvEff[t], give[t]) : (recvEff[t] > 0 ? 1 : 0))
+          : (recvEff[t] - give[t]) / Math.max(recvEff[t], give[t], 1);
+      }
       const g = tbGrade(netPct);
       const lab = Math.abs(netPct) < 0.05 ? 'Even' : (netPct > 0 ? 'Wins' : 'Overpays');
       return { t: t, netPct: netPct, g: g, lab: lab };
     });
     const worst = Math.min.apply(null, sides.map(s => s.netPct));
     const best = sides.slice().sort((a,b) => b.netPct - a.netPct)[0];
-    const totalsArr = parts.map(t => recv[t]);
+    const worstSide = sides.slice().sort((a,b) => a.netPct - b.netPct)[0];
+    const totalsArr = parts.map(t => recvEff[t]);
     const wonBy = wonByPct(Math.max.apply(null, totalsArr), Math.min.apply(null, totalsArr));
+    const evenGap = Math.round(Math.max.apply(null, totalsArr) - Math.min.apply(null, totalsArr));
     const overallGrade = tbGrade(worst);
     const overallMsg = wonBy <= 0.05 ? 'All teams got a fair deal'
       : teamName(best.t) + ' comes out ahead by ' + Math.round(wonBy * 100) + '%';
@@ -3036,8 +3091,9 @@ function tradeBuilderHtml() {
         </div>
         <div class="tb-side-cols">
           <div class="tb-getcol">
-            <div class="tb-colhead"><span class="tx-add">Gets</span><span class="tb-val">${fmt(recv[s.t])}</span></div>
+            <div class="tb-colhead"><span class="tx-add">Gets</span><span class="tb-val">${fmt(recvEff[s.t])}</span></div>
             ${gets.length ? gets.map(x => `<div class="tb-row"><span>${tbAssetName(x.a)}</span><span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" onclick="tbRemoveAsset(${x.i})" title="Remove">&times;</button></span></div>`).join('') : '<div class="tb-meta">—</div>'}
+            ${adj[s.t] > 0 ? `<div class="tb-row tb-adj" title="Value Adjustment: elite, roster-spot-efficient assets are worth more than their raw sum"><span>Value Adjustment <span class="va-info" onclick="event.stopPropagation();alert(VA_EXPLAIN)">?</span></span><span class="tb-val">+${fmt(adj[s.t])}</span></div>` : ''}
           </div>
           <div class="tb-getcol">
             <div class="tb-colhead"><span class="tx-drop">Sends</span><span class="tb-val">${fmt(give[s.t])}</span></div>
@@ -3047,6 +3103,9 @@ function tradeBuilderHtml() {
       </div>`;
     });
 
+    if (wonBy > 0.05 && evenGap > 0) {
+      html += `<div class="tb-even-hint">Add value worth <b>${fmt(evenGap)}</b> to ${teamName(worstSide.t)} to even it out.</div>`;
+    }
     html += `<div style="margin-top:12px;"><button class="cancel-btn" onclick="tbClear()">Clear trade</button></div>`;
     html += `</div>`;
   }
@@ -3080,10 +3139,11 @@ function tradeBuilderHtml() {
       <div class="tb-col-body">`;
     players.forEach(pid => { html += tbCardHtml(pid, t, M, tbHasPlayer(pid), false); });
     coachPicks(t).forEach(pk => {
-      const added = tbHasPick(t, pk.label);
-      html += `<div class="tb-pcard ${added ? 'added' : ''}" ${added ? '' : `onclick="tbPickPick('${t}','${pk.label}',${Math.round(pk.value)})"`}>
+      const added = tbHasPick(pk.id);
+      const viaTxt = pk.via ? ` <span class="tb-meta">via ${escHtml(pk.via)}</span>` : '';
+      html += `<div class="tb-pcard ${added ? 'added' : ''}" ${added ? '' : `onclick="tbPickPick('${t}','${escJs(pk.id)}','${escJs(pk.label)}','${escJs(pk.via)}',${Math.round(pk.value)})"`}>
         <div class="tb-pcard-top"><span class="pos-badge pos-pick">PICK</span><span class="tb-val" style="margin-left:auto">${fmt(pk.value)}</span></div>
-        <div class="tb-pcard-name">${pk.label}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
+        <div class="tb-pcard-name">${pk.label}${viaTxt}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
       </div>`;
     });
     html += `</div></div>`;
@@ -3109,7 +3169,7 @@ function tbCardHtml(pid, from, M, added, isSearch) {
 
 function tbAssetName(a) {
   if (a.kind === 'pick') {
-    return `<b>${a.label}</b> <span class="tb-meta">pick${a.from ? ' · from ' + teamName(a.from) : ''}</span>`;
+    return `<b>${escHtml(a.label)}</b> <span class="tb-meta">pick${a.via ? ' · ' + escHtml(a.via) + '’s' : ''}${a.from ? ' · from ' + teamName(a.from) : ''}</span>`;
   }
   const p = state.players[String(a.pid)] || {};
   const meta = [p.position, p.team].filter(Boolean).join(' · ');
