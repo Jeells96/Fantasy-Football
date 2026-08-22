@@ -969,15 +969,22 @@ const NOTES_COLLECTION = 'leagueNotes';
 const TRADE_GRADES_COLLECTION = 'tradeGrades';
 const MAX_WEEKS = 18;
 
+// Maps each Sleeper team name (lowercased) to the real person. Include every
+// alternate team name a person has used across dynasty seasons, so trade history
+// and the leaderboard collapse to the 8 real owners instead of counting renames
+// as separate teams.
 const REAL_NAME_BY_SLEEPER_TEAM = {
   'nacua matada': 'Jaren',
   'ross': 'Ross',
   'dakota': 'Dakota',
   'linn': 'Linn',
+  'pierce my penix': 'Linn',
   'darnell mooned me': 'Ryder',
   'they hit the second bower': 'Reese',
   'to infinity and bijan': 'Duke',
-  'njigbas in paris': 'Dylan'
+  'unsolicited nix pix': 'Duke',
+  'njigbas in paris': 'Dylan',
+  'gibbs/bijan pound patrol': 'Dylan'
 };
 
 function getStoredLeagueId() {
