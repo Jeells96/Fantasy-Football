@@ -662,10 +662,23 @@ body.modal-open { overflow:hidden; }
   font-family:'DM Mono', monospace;
   font-size:.68rem;
   color:var(--muted);
-  width:82px;
+  width:150px;
   flex:none;
   text-align:right;
 }
+.need-bar-note b { color:var(--text); }
+
+/* league rankings (Analyze League) */
+.lr-list { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+.lr-row { display:flex; align-items:center; gap:12px; padding:8px 12px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; }
+.lr-row.me { border-color:var(--accent); background:rgba(232,200,74,.08); }
+.lr-rank { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; width:24px; height:24px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--surface); border:1px solid var(--border); color:var(--muted); }
+.lr-rank.r1 { background:var(--accent); color:#000; border-color:var(--accent); }
+.lr-rank.r2 { background:#c8ccd8; color:#000; border-color:#c8ccd8; }
+.lr-rank.r3 { background:#cd8a54; color:#000; border-color:#cd8a54; }
+.lr-name { font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lr-val { font-family:'DM Mono',monospace; font-size:.82rem; color:var(--muted); flex:none; }
+.lr-row .tb-grade { flex:none; min-width:30px; text-align:right; }
 
 .trade-card {
   background:rgba(0,0,0,.22);
@@ -2647,6 +2660,68 @@ function analyzeLeague() {
   return { M, teams, avg, median };
 }
 
+/* ---------- coach: league-wide rankings ---------- */
+
+// Letter grade for a value relative to the league average (so a bunched league grades
+// tightly and an outlier stands out). Maps onto the existing g-a/g-b/g-c/g-d colors.
+function leagueGrade(value, avg) {
+  const r = avg > 0 ? value / avg : 1;
+  if (r >= 1.25) return 'A+';
+  if (r >= 1.12) return 'A';
+  if (r >= 1.04) return 'B+';
+  if (r >= 0.96) return 'B';
+  if (r >= 0.84) return 'C';
+  if (r >= 0.68) return 'D';
+  return 'F';
+}
+
+// One ranked table: rows = [{rid, value}] (unsorted), graded vs their own average.
+function rankTableHtml(title, rows, myRid) {
+  const sorted = rows.slice().sort((a,b) => b.value - a.value);
+  const avg = sorted.length ? sorted.reduce((s,x) => s + x.value, 0) / sorted.length : 0;
+  let h = `<div class="detail-title">${escHtml(title)}</div><div class="lr-list">`;
+  sorted.forEach((row, i) => {
+    const grade = leagueGrade(row.value, avg);
+    const rcls = i < 3 ? ' r' + (i + 1) : '';
+    const me = String(row.rid) === String(myRid) ? ' me' : '';
+    h += `<div class="lr-row${me}">
+      <span class="lr-rank${rcls}">${i + 1}</span>
+      <span class="lr-name">${escHtml(teamName(row.rid))}</span>
+      <span class="lr-val">${Math.round(row.value).toLocaleString()}</span>
+      <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
+    </div>`;
+  });
+  return h + `</div>`;
+}
+
+// League-wide report: per-position starter strength, overall starters, and overall roster
+// (starters + top 5 bench). Ranks + grades every team; highlights myRid.
+function leagueReport(myRid) {
+  const league = analyzeLeague();
+  const M = league.M;
+  const ids = Object.keys(league.teams);
+  if (!ids.length) return '<div class="empty">No teams found.</div>';
+
+  // Overall roster value = optimal-starter total + the 5 best bench players.
+  ids.forEach(id => {
+    const t = league.teams[id];
+    const inLineup = {}; (t.lineup.picked || []).forEach(p => inLineup[String(p)] = 1);
+    const bench = (t.players || []).filter(p => !inLineup[String(p)])
+      .map(p => M.baseValue(p)).sort((a,b) => b - a);
+    t.benchTop5 = bench.slice(0, 5).reduce((a,b) => a + b, 0);
+    t.overall = t.now + t.benchTop5;
+  });
+
+  let html = `<div class="coach-sub">How all ${ids.length} teams rank — by position, by starting lineup, and by overall roster (best starters + top-5 bench). Grades are relative to the league average; your team is highlighted.</div>`;
+
+  html += rankTableHtml('Overall Roster — starters + top 5 bench', ids.map(id => ({ rid: id, value: league.teams[id].overall })), myRid);
+  html += rankTableHtml('Starting Lineup', ids.map(id => ({ rid: id, value: league.teams[id].now })), myRid);
+  ['QB','RB','WR','TE'].forEach(pos => {
+    html += rankTableHtml(pos + ' — starter strength', ids.map(id => ({ rid: id, value: league.teams[id].strength[pos] })), myRid);
+  });
+  return html;
+}
+
 /* ---------- coach: trade engine ---------- */
 
 function valueTo(team, pid, M) {
@@ -2889,7 +2964,14 @@ function coachReport(rosterId) {
     </div>
   `;
 
-  // Positional strength
+  // Positional strength — bars plus the actual value, league rank, and league average.
+  const leagueIds = Object.keys(league.teams);
+  const nTeams = leagueIds.length || 1;
+  const posRank = {};
+  ['QB','RB','WR','TE'].forEach(pos => {
+    const sorted = leagueIds.slice().sort((a,b) => league.teams[b].strength[pos] - league.teams[a].strength[pos]);
+    posRank[pos] = sorted.findIndex(id => String(id) === String(rosterId)) + 1;
+  });
   const maxStrength = Math.max.apply(null, ['QB','RB','WR','TE'].map(p => league.avg[p] * 1.6));
 
   html += `<div class="detail-box"><div class="detail-title">Starting Lineup Strength vs League</div>`;
@@ -2897,12 +2979,13 @@ function coachReport(rosterId) {
     const pct = Math.max(3, Math.min(100, (me.strength[pos] / maxStrength) * 100));
     const d = me.deficit[pos];
     const cls = d > 0.25 ? 'weak' : (d > 0.05 ? 'mid' : '');
-    const note = d > 0.25 ? 'weak spot' : (d > 0.05 ? 'below avg' : 'strength');
+    const val = Math.round(me.strength[pos]).toLocaleString();
+    const avg = Math.round(league.avg[pos]).toLocaleString();
     html += `
       <div class="need-bar-row">
         <span class="need-bar-label">${pos}</span>
         <span class="need-bar ${cls}"><span style="width:${pct}%"></span></span>
-        <span class="need-bar-note">${note}</span>
+        <span class="need-bar-note"><b>${val}</b> · #${posRank[pos]}/${nTeams} · avg ${avg}</span>
       </div>
     `;
   });
@@ -3371,6 +3454,7 @@ function renderCoachTab(rosterId, mode) {
     <div class="coach-modes">
       <button class="mode-btn ${mode === 'build' ? 'active' : ''}" onclick="renderCoachTab(undefined,'build')">Trade Builder</button>
       <button class="mode-btn ${mode === 'analyze' ? 'active' : ''}" onclick="renderCoachTab(undefined,'analyze')">Team Analysis</button>
+      <button class="mode-btn ${mode === 'league' ? 'active' : ''}" onclick="renderCoachTab(undefined,'league')">Analyze League</button>
       <button class="mode-btn ${mode === 'history' ? 'active' : ''}" onclick="renderCoachTab(undefined,'history')">Trade History</button>
     </div>
     ${mode === 'analyze' ? `
@@ -3405,6 +3489,8 @@ function renderCoachTab(rosterId, mode) {
         await ensureFrozenGrades();
         if (state.activeTab !== 'coach' || state.coachMode !== 'history') return;
         body.innerHTML = tradeHistoryHtml();
+      } else if (mode === 'league') {
+        body.innerHTML = leagueReport(myRosterId());
       } else {
         if (!sel) {
           body.innerHTML = '<div class="tb-verdict close">Pick a team above to see its roster analysis and suggested trades.</div>';
