@@ -1266,6 +1266,8 @@ function showTab(tab) {
     button.classList.toggle('active', button.dataset.tab === tab);
   });
   renderTab();
+  // Start each tab at the top so its headers are visible (don't inherit the prior scroll).
+  window.scrollTo(0, 0);
 }
 
 function renderTab() {
@@ -3033,13 +3035,17 @@ function tbRender() {
   const body = document.getElementById('coachBody');
   if (!body) return;
 
+  // Preserve the page scroll position across the re-render so adding/removing an asset
+  // doesn't jump the view back to the top.
+  const y = window.scrollY;
   const searchFocused = document.activeElement && document.activeElement.id === 'tbSearchInput';
   body.innerHTML = tradeBuilderHtml();
 
   if (searchFocused) {
     const inp = document.getElementById('tbSearchInput');
-    if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
+    if (inp) { inp.focus({ preventScroll: true }); inp.selectionStart = inp.selectionEnd = inp.value.length; }
   }
+  window.scrollTo(0, y);
 }
 
 function tbAddTeam(rid) {
@@ -3098,6 +3104,7 @@ function tbCancelPending() { state.tb.pending = null; tbRender(); }
 function tbAddPlayer(pid, from, to) {
   if (!to || tbHasPlayer(pid)) { tbRender(); return; }
   state.tb.assets.push({ kind:'player', pid:String(pid), from:String(from || ''), to:String(to) });
+  state.tb.search = '';   // clear the search box after adding a searched player
   tbRender();
 }
 function tbAddPick(from, id, label, via, value, to) {
