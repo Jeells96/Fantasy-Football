@@ -796,9 +796,12 @@ body.modal-open { overflow:hidden; }
 .tb-colhead { display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:.72rem; margin-bottom:6px; }
 .tb-adj { background:rgba(232,200,74,.08); border-color:rgba(232,200,74,.35); color:var(--accent); }
 .tb-adj .tb-val { color:var(--accent); }
+.tb-adj.neg { background:rgba(232,74,106,.08); border-color:rgba(232,74,106,.35); color:var(--danger); }
+.tb-adj.neg .tb-val { color:var(--danger); }
 .va-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid currentColor; font-size:.6rem; margin-left:4px; cursor:pointer; opacity:.8; }
 .tb-even-hint { margin-top:12px; padding:10px 12px; background:rgba(74,157,232,.1); border:1px solid rgba(74,157,232,.3); border-radius:8px; font-size:.85rem; color:var(--text); }
 .tb-adj-inline { color:var(--accent); font-family:'DM Mono',monospace; }
+.tb-adj-inline.neg { color:var(--danger); }
 .th-histhead { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:16px 0 10px; }
 .th-gear { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; width:30px; height:30px; font-size:.9rem; cursor:pointer; flex:none; }
 .th-gear:hover { border-color:var(--accent); color:var(--accent); }
@@ -940,7 +943,6 @@ body.modal-open { overflow:hidden; }
     <button class="tab" data-tab="coach" onclick="showTab('coach')">Trades</button>
     <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
     <button class="tab" data-tab="notes" onclick="showTab('notes')">League Notes</button>
-    <button class="tab" data-tab="settings" onclick="showTab('settings')">Settings</button>
   </div>
 </div>
 
@@ -972,6 +974,10 @@ const db = firebase.firestore();
 const API = 'https://api.sleeper.app/v1';
 const DEFAULT_LEAGUE_ID = '1330745662001659904';
 const LEAGUE_ID_STORAGE_KEY = 'ff.leagueId';
+// The league is found the way DynastyCalc does it: by Sleeper username + the league's name.
+// This survives the yearly league-ID change automatically, so there's no ID to maintain.
+const SLEEPER_USERNAME = 'JarenE';
+const LEAGUE_NAME_MATCH = 'dynasty';
 const NOTE_PASSCODE = '2325';
 const NOTES_COLLECTION = 'leagueNotes';
 const TRADE_GRADES_COLLECTION = 'tradeGrades';
@@ -1016,6 +1022,7 @@ function freshState() {
     drafts:[],
     players:{},
     ownerMap:{},
+    personByUserId:{},
     userByRosterId:{},
     draftDetails:{},
     draftPicksBySeason:{},
@@ -1068,6 +1075,31 @@ async function fetchJSON(url) {
   return r.json();
 }
 
+// Find the current league ID from the Sleeper username + league name (the "dynasty" league),
+// so a new season's league ID is picked up automatically. Falls back to the last-loaded ID
+// (cached) or the built-in default if the lookup fails (offline, rename, etc.).
+async function resolveLeagueId() {
+  const cached = getStoredLeagueId();
+  try {
+    const user = await fetchJSON(API + '/user/' + encodeURIComponent(SLEEPER_USERNAME));
+    if (user && user.user_id) {
+      const yr = Number(currentSeasonYear());
+      let leagues = [];
+      for (const season of [yr, yr - 1]) {   // current season, then last (offseason rollover)
+        leagues = await fetchJSON(API + '/user/' + user.user_id + '/leagues/nfl/' + season).catch(() => []);
+        if (leagues && leagues.length) break;
+      }
+      const want = LEAGUE_NAME_MATCH.toLowerCase();
+      const match = (leagues || []).find(l => String(l.name || '').toLowerCase().includes(want)) || (leagues || [])[0];
+      if (match && match.league_id) {
+        try { localStorage.setItem(LEAGUE_ID_STORAGE_KEY, match.league_id); } catch (e) {}
+        return match.league_id;
+      }
+    }
+  } catch (e) {}
+  return cached;
+}
+
 function getSleeperTeamName(user, rosterId) {
   if (user && user.metadata && user.metadata.team_name) return user.metadata.team_name;
   if (user && user.display_name) return user.display_name;
@@ -1092,6 +1124,9 @@ async function init() {
   closeTeamCard();
 
   try {
+    // Resolve the league from the Sleeper username + name (auto-follows the yearly ID change).
+    s.leagueId = await resolveLeagueId();
+
     // Core league data — the site can't work without these three.
     const [league, users, rosters] = await Promise.all([
       fetchJSON(API + '/league/' + s.leagueId),
@@ -1127,6 +1162,9 @@ async function init() {
       const realName = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(sleeperTeamName)] || sleeperTeamName;
       s.ownerMap[String(r.roster_id)] = realName;
       s.userByRosterId[String(r.roster_id)] = u || null;
+      // Keyed by the STABLE Sleeper user id, so a team rename in any season still routes
+      // back to the same person (the team-name alias table just prettifies the label).
+      if (r.owner_id) s.personByUserId[String(r.owner_id)] = realName;
     });
 
     await Promise.all(
@@ -1197,7 +1235,6 @@ function renderTab() {
   else if (state.activeTab === 'activity') renderActivity();
   else if (state.activeTab === 'coach') renderCoachTab();
   else if (state.activeTab === 'news') renderNews();
-  else if (state.activeTab === 'settings') renderSettings();
   else renderDraftTab();
 }
 
@@ -3098,14 +3135,23 @@ function tradeBuilderHtml() {
 
   // RESULT / evaluator
   if (tb.assets.length) {
-    // Value Adjustment: credit the side that consolidates (gives more pieces than it gets).
-    const givenPieces = {}; parts.forEach(t => givenPieces[t] = tb.assets.filter(a => a.from === t).length);
-    const adj = {}; const recvEff = {};
+    // Value Adjustment (zero-sum transfer): the side that consolidates (gives more pieces than
+    // it gets) earns a premium; whoever GAVE it those consolidated pieces is charged the same.
+    const givenPieces = {}, recvPieces = {}, credit = {}, charge = {};
     parts.forEach(t => {
-      const vals = tb.assets.filter(a => a.to === t).map(assetVal);
-      adj[t] = valueAdjustment(vals, givenPieces[t]);
-      recvEff[t] = recv[t] + adj[t];
+      givenPieces[t] = tb.assets.filter(a => a.from === t).length;
+      recvPieces[t] = tb.assets.filter(a => a.to === t).length;
+      charge[t] = 0;
     });
+    parts.forEach(t => { credit[t] = valueAdjustment(tb.assets.filter(a => a.to === t).map(assetVal), givenPieces[t]); });
+    parts.forEach(j => {
+      if (!credit[j] || !recvPieces[j]) return;
+      const froms = {};
+      tb.assets.filter(a => a.to === j).forEach(a => { froms[a.from] = (froms[a.from] || 0) + 1; });
+      Object.keys(froms).forEach(i => { if (charge[i] != null) charge[i] += credit[j] * froms[i] / recvPieces[j]; });
+    });
+    const adj = {}, recvEff = {};
+    parts.forEach(t => { adj[t] = Math.round(credit[t] - charge[t]); recvEff[t] = recv[t] + adj[t]; });
 
     const sides = parts.map(t => {
       // 2-team: compare the two effective "gets" totals directly (symmetric). Multi-team:
@@ -3151,7 +3197,7 @@ function tradeBuilderHtml() {
           <div class="tb-getcol">
             <div class="tb-colhead"><span class="tx-add">Gets</span><span class="tb-val">${fmt(recvEff[s.t])}</span></div>
             ${gets.length ? gets.map(x => `<div class="tb-row"><span>${tbAssetName(x.a)}</span><span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" onclick="tbRemoveAsset(${x.i})" title="Remove">&times;</button></span></div>`).join('') : '<div class="tb-meta">—</div>'}
-            ${adj[s.t] > 0 ? `<div class="tb-row tb-adj" title="Value Adjustment: elite, roster-spot-efficient assets are worth more than their raw sum"><span>Value Adjustment <span class="va-info" onclick="event.stopPropagation();alert(VA_EXPLAIN)">?</span></span><span class="tb-val">+${fmt(adj[s.t])}</span></div>` : ''}
+            ${adj[s.t] ? `<div class="tb-row tb-adj${adj[s.t] < 0 ? ' neg' : ''}" title="Value Adjustment: consolidating into fewer, more elite pieces earns a premium; shedding a stud for a pile is charged that premium"><span>Value Adjustment <span class="va-info" onclick="event.stopPropagation();alert(VA_EXPLAIN)">?</span></span><span class="tb-val">${adj[s.t] > 0 ? '+' : '−'}${fmt(Math.abs(adj[s.t]))}</span></div>` : ''}
           </div>
           <div class="tb-getcol">
             <div class="tb-colhead"><span class="tx-drop">Sends</span><span class="tb-val">${fmt(give[s.t])}</span></div>
@@ -3334,6 +3380,7 @@ async function loadTradeHistory() {
   }
 
   const nameByLeague = {};
+  const ownerByLeague = {};  // leagueId -> { rosterId: owner_id } (stable person key)
   const seasonDraft = {};
   const trades = [];
   const txAll = [];          // every completed transaction (all types)
@@ -3351,12 +3398,18 @@ async function loadTradeHistory() {
     const ubyid = {};
     (users || []).forEach(u => ubyid[u.user_id] = u);
     const nm = {};
+    const owners = {};
     (rosters || []).forEach(r => {
       const u = ubyid[r.owner_id];
       const tn = getSleeperTeamName(u, r.roster_id);
-      nm[String(r.roster_id)] = REAL_NAME_BY_SLEEPER_TEAM[normalizeName(tn)] || tn;
+      // Prefer the stable user-id -> person mapping (survives renames); fall back to the
+      // team-name alias table, then the raw team name.
+      const byUser = r.owner_id && state.personByUserId[String(r.owner_id)];
+      nm[String(r.roster_id)] = byUser || REAL_NAME_BY_SLEEPER_TEAM[normalizeName(tn)] || tn;
+      if (r.owner_id) owners[String(r.roster_id)] = String(r.owner_id);
     });
     nameByLeague[lgId] = nm;
+    ownerByLeague[lgId] = owners;
 
     const d = (drafts || [])[0];
     if (d && d.draft_id) {
@@ -3404,11 +3457,15 @@ async function loadTradeHistory() {
   }));
 
   trades.sort((a,b) => b.date - a.date);
-  s.tradeHistory = { trades: trades, txAll: txAll, draftedBy: draftedBy, nameByLeague: nameByLeague, seasonDraft: seasonDraft };
+  s.tradeHistory = { trades: trades, txAll: txAll, draftedBy: draftedBy, nameByLeague: nameByLeague, ownerByLeague: ownerByLeague, seasonDraft: seasonDraft };
   return s.tradeHistory;
 }
 
+// Resolve a (league, roster) to the person's display name. Routes through the stable
+// Sleeper user id first (survives team renames across seasons), then the name mapping.
 function histName(th, leagueId, rid) {
+  const owner = th.ownerByLeague && th.ownerByLeague[leagueId] && th.ownerByLeague[leagueId][String(rid)];
+  if (owner && state.personByUserId[owner]) return state.personByUserId[owner];
   const nm = th.nameByLeague[leagueId];
   return (nm && nm[String(rid)]) || teamName(rid);
 }
@@ -3511,20 +3568,49 @@ function tradePending(tr, th) {
 // plain object that can be rendered live OR persisted as a frozen snapshot.
 function computeTradeSides(tr, becameMode, M, th) {
   th = th || state.tradeHistory;
-  const sides = tr.rosterIds.map(rid => {
+  const ids = tr.rosterIds.map(String);
+
+  // Who gave each received piece: recvFrom[receiver][giver] = # of pieces.
+  const recvFrom = {}; ids.forEach(r => recvFrom[r] = {});
+  Object.keys(tr.adds).forEach(pid => {
+    const j = String(tr.adds[pid]), i = String(tr.drops[pid]);
+    if (recvFrom[j]) recvFrom[j][i] = (recvFrom[j][i] || 0) + 1;
+  });
+  (tr.draft_picks || []).forEach(p => {
+    const j = String(p.owner_id), i = String(p.previous_owner_id);
+    if (recvFrom[j]) recvFrom[j][i] = (recvFrom[j][i] || 0) + 1;
+  });
+
+  // Base per side + the consolidation credit it earns (gap = pieces given − pieces got).
+  const base = ids.map(rid => {
     const got = histSide(tr, rid, th, becameMode, M);
     const sent = histSent(tr, rid, th, becameMode, M);
-    // pieces this side gave away: players dropped + picks sent
-    const sentPieces = Object.keys(tr.drops).filter(pid => String(tr.drops[pid]) === String(rid)).length +
-      (tr.draft_picks || []).filter(p => String(p.previous_owner_id) === String(rid)).length;
-    const adj = valueAdjustment(got.items.map(it => it.value), sentPieces);
-    const net = (got.total + adj) - sent;
-    return { rid: String(rid), name: histName(th, tr.leagueId, rid),
-      items: got.items, total: got.total, sent: sent, adj: adj, net: net,
-      ownPct: net / Math.max(got.total + adj, sent, 1) };
+    const sentPieces = Object.keys(tr.drops).filter(pid => String(tr.drops[pid]) === rid).length +
+      (tr.draft_picks || []).filter(p => String(p.previous_owner_id) === rid).length;
+    const credit = valueAdjustment(got.items.map(it => it.value), sentPieces);
+    return { rid: rid, name: histName(th, tr.leagueId, rid), items: got.items, total: got.total, sent: sent, credit: credit };
   });
-  const totalRecv = sides.reduce((a,x) => a + x.total + x.adj, 0) || 1;
-  const best = sides.slice().sort((a,b) => b.net - a.net)[0];
+  const creditOf = {}; base.forEach(b => creditOf[b.rid] = b.credit);
+
+  // Transfer: whoever GAVE the pieces a side consolidated pays that side's premium
+  // (proportional to how many of the consolidated pieces they contributed). Zero-sum.
+  const charge = {}; ids.forEach(r => charge[r] = 0);
+  ids.forEach(j => {
+    if (!creditOf[j]) return;
+    const froms = recvFrom[j];
+    const totalPieces = Object.keys(froms).reduce((a, k) => a + froms[k], 0);
+    if (!totalPieces) return;
+    Object.keys(froms).forEach(i => { if (charge[i] != null) charge[i] += creditOf[j] * froms[i] / totalPieces; });
+  });
+
+  const sides = base.map(b => {
+    const adj = Math.round(b.credit - charge[b.rid]);   // net Value Adjustment (+ credit / − charge)
+    const net = (b.total + adj) - b.sent;
+    return { rid: b.rid, name: b.name, items: b.items, total: b.total, sent: b.sent,
+      adj: adj, net: net, ownPct: net / Math.max(b.total, b.sent, 1) };
+  });
+  const totalRecv = sides.reduce((a, x) => a + x.total + Math.max(x.adj, 0), 0) || 1;
+  const best = sides.slice().sort((a, b) => b.net - a.net)[0];
   const worstOwnPct = Math.min.apply(null, sides.map(x => x.ownPct));
   const wonBy = best ? best.net / totalRecv : 0;
   const grade = tbGrade(worstOwnPct);
@@ -3656,7 +3742,7 @@ function tradeCardHtml(tr, opts) {
         const via = it.via ? ` <span class="tb-via">via ${escHtml(it.via)}</span>` : '';
         return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}${via}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
       }).join('') || '<div class="tb-meta">—</div>'}
-      <div class="tb-side-total">Gets ${fmt(s.total)}${s.adj > 0 ? ` <span class="tb-adj-inline" title="Value Adjustment: elite, roster-spot-efficient assets are worth more than their raw sum">+${fmt(s.adj)} adj</span>` : ''} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
+      <div class="tb-side-total">Gets ${fmt(s.total)}${s.adj ? ` <span class="tb-adj-inline${s.adj < 0 ? ' neg' : ''}" title="Value Adjustment: consolidating into fewer, more elite pieces is worth a premium; shedding a stud for a pile is charged that premium">${s.adj > 0 ? '+' : '−'}${fmt(Math.abs(s.adj))} adj</span>` : ''} · Gave ${fmt(s.sent)} · Net <span class="tb-net ${s.net > 1 ? 'pos' : (s.net < -1 ? 'neg' : '')}">${s.net >= 0 ? '+' : ''}${fmt(s.net)}</span></div>
     </div>`;
   });
 
