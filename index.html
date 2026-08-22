@@ -2702,15 +2702,30 @@ function leagueGrade(value, avg) {
   return 'F';
 }
 
-// How many starting slots a position fills (QB absorbs superflex). Flex is not split out.
-function leagueSlots(M) {
-  const c = starterCounts();
-  return {
-    QB: Math.max(1, (c.QB || 0) + (M.sf ? (c.SUPER_FLEX || 0) : 0)),
-    RB: Math.max(1, c.RB || 0),
-    WR: Math.max(1, c.WR || 0),
-    TE: Math.max(1, c.TE || 0)
-  };
+// Which positions each flex-type slot can hold.
+const FLEX_KINDS = { FLEX:['RB','WR','TE'], WRRB_FLEX:['RB','WR'], REC_FLEX:['WR','TE'], SUPER_FLEX:['QB','RB','WR','TE'] };
+
+// The optimal starting lineup by full rating, respecting every lineup slot including FLEX and
+// SUPER_FLEX. Fixed positions fill first, then flex slots take the best remaining eligible.
+function leagueStarters(players, M) {
+  const rp = (state.league && state.league.roster_positions) || ['QB','RB','RB','WR','WR','TE','FLEX','SUPER_FLEX'];
+  const byPos = { QB:[], RB:[], WR:[], TE:[] };
+  players.forEach(pid => { const p = playerPositionOf(pid); if (byPos[p]) byPos[p].push(pid); });
+  Object.keys(byPos).forEach(p => byPos[p].sort((a,b) => M.dynValue(b) - M.dynValue(a)));
+  const used = {}, picked = [];
+  rp.forEach(slot => {                              // fixed QB/RB/WR/TE slots
+    if (!byPos[slot]) return;
+    const pid = byPos[slot].find(x => !used[x]);
+    if (pid) { used[pid] = 1; picked.push(pid); }
+  });
+  rp.forEach(slot => {                              // flex / super-flex slots
+    const kinds = FLEX_KINDS[slot];
+    if (!kinds) return;
+    let best = null;
+    kinds.forEach(pos => { const pid = (byPos[pos] || []).find(x => !used[x]); if (pid && (!best || M.dynValue(pid) > M.dynValue(best))) best = pid; });
+    if (best) { used[best] = 1; picked.push(best); }
+  });
+  return picked;
 }
 
 // The players counted for a team+category, listed with their full (blended) rating.
@@ -2779,7 +2794,6 @@ function alRerender() {
 // row expands to the players counted.
 function leagueReport(myRid) {
   const M = buildValueModel();
-  const slots = leagueSlots(M);
   const POS = ['QB','RB','WR','TE'];
   const benchN = state.alBench ? (state.alBenchN || 0) : 0;
   // Which team's placement the collapsed headers show (default: my team). Saved locally.
@@ -2793,18 +2807,21 @@ function leagueReport(myRid) {
     players.forEach(pid => byPos[playerPositionOf(pid)].push(pid));
     POS.forEach(p => byPos[p].sort((a,b) => M.dynValue(b) - M.dynValue(a)));
 
-    // Per-position categories: that position's starters + its top N backups.
+    // Starters = the real optimal lineup (respects FLEX + SUPER_FLEX).
+    const starterPids = leagueStarters(players, M);
+    const starterSet = {}; starterPids.forEach(pid => starterSet[pid] = 1);
+
+    // Per-position categories: that position's starters (incl. any who fill FLEX/SF) + top N backups.
     const pool = {}, posVal = {};
-    const starterSet = {};
     POS.forEach(p => {
-      byPos[p].slice(0, slots[p]).forEach(pid => starterSet[pid] = 1);
-      pool[p] = byPos[p].slice(0, slots[p] + benchN);
+      const posStarters = byPos[p].filter(pid => starterSet[pid]);
+      const backups = byPos[p].filter(pid => !starterSet[pid]).slice(0, benchN);
+      pool[p] = posStarters.concat(backups);
       posVal[p] = pool[p].reduce((s,pid) => s + M.dynValue(pid), 0);
     });
 
-    // Overall roster: all starters + the top N bench players TOTAL (across positions),
+    // Overall roster: full starting lineup + the top N bench players TOTAL (across positions),
     // each at their full rating (no backup discount).
-    const starterPids = Object.keys(starterSet);
     const benchPids = players.filter(pid => !starterSet[pid])
       .sort((a,b) => M.dynValue(b) - M.dynValue(a)).slice(0, benchN);
     const overallPids = starterPids.concat(benchPids);
