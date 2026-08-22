@@ -842,6 +842,9 @@ body.modal-open { overflow:hidden; }
 .pc-event:first-child { border-top:none; }
 .pc-when { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--muted); width:110px; flex:none; }
 .pc-what { font-size:.9rem; }
+.pc-trade { padding:8px 0; }
+.pc-hl { outline:1px solid var(--accent); border-radius:6px; }
+.pc-hl .tb-val { color:var(--accent); }
 
 .empty, .error-msg {
   background:var(--card);
@@ -869,8 +872,7 @@ body.modal-open { overflow:hidden; }
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="board" onclick="showTab('board')">Draft Board</button>
-    <button class="tab" data-tab="standings" onclick="showTab('standings')">Draft Order</button>
+    <button class="tab active" data-tab="draft" onclick="showTab('draft')">Draft</button>
     <button class="tab" data-tab="activity" onclick="showTab('activity')">Activity</button>
     <button class="tab" data-tab="coach" onclick="showTab('coach')">Trade Calc</button>
     <button class="tab" data-tab="news" onclick="showTab('news')">News</button>
@@ -966,7 +968,9 @@ function freshState() {
     tb:null,
     coachMode:'build',
     coachRoster:'',
-    activeTab:'board',
+    draftMode:'board',
+    draftHistYear:null,
+    activeTab:'draft',
     notesUnlocked:false,
     editingNoteId:null,
     notes:[],
@@ -1115,12 +1119,11 @@ function showTab(tab) {
 
 function renderTab() {
   if (state.activeTab === 'notes') renderLeagueNotes();
-  else if (state.activeTab === 'standings') renderDraftOrder();
   else if (state.activeTab === 'activity') renderActivity();
   else if (state.activeTab === 'coach') renderCoachTab();
   else if (state.activeTab === 'news') renderNews();
   else if (state.activeTab === 'settings') renderSettings();
-  else renderDraftBoard();
+  else renderDraftTab();
 }
 
 /* ---------- shared team helpers ---------- */
@@ -1297,6 +1300,131 @@ function getAllOwnedPicks(rosterId) {
   });
 }
 
+// The Draft tab groups the board, the rookie-draft-order tracker, and draft history.
+function draftBody() {
+  return document.getElementById('draftBody') || document.getElementById('mainContent');
+}
+
+function renderDraftTab(mode) {
+  mode = mode || state.draftMode || 'board';
+  state.draftMode = mode;
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="coach-modes">
+      <button class="mode-btn ${mode === 'board' ? 'active' : ''}" onclick="renderDraftTab('board')">Draft Board</button>
+      <button class="mode-btn ${mode === 'order' ? 'active' : ''}" onclick="renderDraftTab('order')">Draft Order</button>
+      <button class="mode-btn ${mode === 'history' ? 'active' : ''}" onclick="renderDraftTab('history')">Draft History</button>
+    </div>
+    <div id="draftBody"></div>
+  `;
+
+  if (mode === 'order') renderDraftOrder();
+  else if (mode === 'history') renderDraftHistory();
+  else renderDraftBoard();
+}
+
+// name+pos -> Sleeper pid, for resolving hard-coded startup names to clickable players.
+let _nameToPid = null;
+function nameToPid(name, pos) {
+  if (!_nameToPid) {
+    _nameToPid = {};
+    Object.keys(state.players).forEach(pid => {
+      const p = state.players[pid];
+      if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return;
+      const k = ktcNameKey(p.full_name) + '|' + p.position;
+      if (!(k in _nameToPid)) _nameToPid[k] = pid;
+    });
+  }
+  let key = ktcNameKey(name);
+  if (STARTUP_ALIAS[key]) key = STARTUP_ALIAS[key];
+  return _nameToPid[key + '|' + pos];
+}
+
+function renderDraftHistory() {
+  draftBody().innerHTML = `
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Draft History</span>
+      <select class="year-select" id="draftHistSel" onchange="selectDraftHistYear(this.value)">
+        <option>Loading…</option>
+      </select>
+    </div>
+    <div id="draftHistArea"><div class="status"><div class="spinner"></div><p>Loading drafts…</p></div></div>
+  `;
+  loadTradeHistory().then(() => {
+    if (state.activeTab !== 'draft' || state.draftMode !== 'history') return;
+    const th = state.tradeHistory;
+    const seasons = Object.keys((th && th.seasonDraft) || {}).sort((a,b) => Number(b) - Number(a));
+    const opts = ['<option value="espn">2024 · ESPN Startup</option>']
+      .concat(seasons.map(s => `<option value="${s}">${s} · Sleeper Draft</option>`));
+    if (state.draftHistYear == null) state.draftHistYear = 'espn';
+    const sel = document.getElementById('draftHistSel');
+    if (sel) { sel.innerHTML = opts.join(''); sel.value = state.draftHistYear; }
+    renderDraftHistYear();
+  }).catch(e => {
+    const a = document.getElementById('draftHistArea');
+    if (a) a.innerHTML = '<div class="error-msg">Could not load drafts: ' + e.message + '</div>';
+  });
+}
+
+function selectDraftHistYear(y) {
+  state.draftHistYear = y;
+  renderDraftHistYear();
+}
+
+function renderDraftHistYear() {
+  const area = document.getElementById('draftHistArea');
+  if (!area) return;
+  const y = state.draftHistYear || 'espn';
+  area.innerHTML = (y === 'espn') ? startupDraftHtml() : sleeperDraftHtml(y);
+}
+
+function startupDraftHtml() {
+  let html = `<div class="info-banner">The original startup draft, run on ESPN in 2024 before the league moved to Sleeper.</div>`;
+  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Player</th><th>Drafted By</th></tr></thead><tbody>`;
+  let lastR = null;
+  STARTUP_DRAFT.forEach(e => {
+    if (e.r !== lastR) { html += `<tr class="round-header"><td colspan="3">Round ${e.r}</td></tr>`; lastR = e.r; }
+    const pid = nameToPid(e.n, e.pos);
+    const nameHtml = pid ? pLink(pid) : escHtml(e.n);
+    html += `<tr>
+      <td class="pick-num">${e.r}.${String(e.p).padStart(2, '0')}</td>
+      <td>${nameHtml} <span class="tb-meta">${e.pos}</span></td>
+      <td class="team-cell">${e.t}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function sleeperDraftHtml(season) {
+  const th = state.tradeHistory;
+  const sd = (th.seasonDraft && th.seasonDraft[season]) || {};
+  const teams = sd.teams || (state.rosters.length || 8);
+  const picks = Object.keys(th.draftedBy)
+    .map(pid => Object.assign({ pid: pid }, th.draftedBy[pid]))
+    .filter(d => String(d.season) === String(season))
+    .sort((a,b) => (a.pick || 0) - (b.pick || 0));
+
+  if (!picks.length) return '<div class="empty">No draft data recorded for this season.</div>';
+
+  let html = `<div class="info-banner">${season} Sleeper rookie draft · ${picks.length} picks</div>`;
+  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Player</th><th>Drafted By</th></tr></thead><tbody>`;
+  let lastR = null;
+  picks.forEach(d => {
+    if (d.round !== lastR) { html += `<tr class="round-header"><td colspan="3">Round ${d.round}</td></tr>`; lastR = d.round; }
+    const slot = (d.pick || 1) - (d.round - 1) * teams;
+    const nm = (th.nameByLeague[d.leagueId] || {})[d.rosterId] || teamName(d.rosterId);
+    const pos = (state.players[d.pid] || {}).position || '';
+    html += `<tr>
+      <td class="pick-num">${d.round}.${String(slot).padStart(2, '0')}</td>
+      <td>${pLink(d.pid)} <span class="tb-meta">${pos}</span></td>
+      <td class="team-cell">${nm}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  return html;
+}
+
 function renderDraftBoard() {
   const year = state.selectedDraftYear;
   const draftForYear = state.drafts.find(d => String(d.season) === String(year));
@@ -1428,7 +1556,7 @@ function renderDraftBoard() {
 
   html += `</tbody></table></div>`;
 
-  document.getElementById('mainContent').innerHTML = html;
+  draftBody().innerHTML = html;
 }
 
 function selectDraftYear(year) {
@@ -3141,73 +3269,85 @@ function tradeHistToggle(id) {
   if (body) body.innerHTML = tradeHistoryHtml();
 }
 
+// One trade rendered as a graded card. opts: { M, becameToggle, highlightPid }.
+function tradeCardHtml(tr, opts) {
+  opts = opts || {};
+  const th = state.tradeHistory;
+  const M = opts.M || buildValueModel();
+  const fmt = v => Math.round(v).toLocaleString();
+  const hl = opts.highlightPid ? String(opts.highlightPid) : null;
+  const became = opts.becameToggle && !!state.tradeHistoryOpen[tr.id];
+
+  const hasPicks = tr.draft_picks.some(p => {
+    const r = resolveHistPick(th, p.season, p.round, p.roster_id);
+    return r && r.playerId;
+  });
+
+  const sides = tr.rosterIds.map(rid => {
+    const got = histSide(tr, rid, th, became, M);
+    const sent = histSent(tr, rid, th, became, M);
+    return { rid: String(rid), got: got, net: got.total - sent };
+  });
+
+  const totals = sides.map(s => s.got.total);
+  const hi = Math.max.apply(null, totals), lo = Math.min.apply(null, totals);
+  const gradePct = hi > 0 ? (hi - lo) / hi : 0;
+  const pct = wonByPct(hi, lo);
+  const winner = pct >= 0.05 ? sides.slice().sort((a,b) => b.net - a.net)[0] : null;
+  const grade = tbGrade(-gradePct);
+  const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
+
+  let html = `<div class="tx-card">
+    <div class="tx-top">
+      <span class="tx-date">${date}${became ? ' <span class="tx-badge trade">what it became</span>' : ''}</span>
+      <span style="margin-left:auto">Grade: <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span></span>
+    </div>
+    <div class="th-sides">`;
+
+  sides.forEach(s => {
+    const win = winner && winner.rid === s.rid;
+    html += `<div class="th-side">
+      <div class="th-side-name">${histName(th, tr.leagueId, s.rid)}${win ? ' <span class="th-w">W</span>' : ''}</div>
+      ${s.got.items.map(it => {
+        const nameHtml = it.pid ? pLink(it.pid) : escHtml(it.label);
+        const rowCls = (hl && it.pid === hl) ? ' pc-hl' : '';
+        return `<div class="tb-row${rowCls}"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${nameHtml}</span><span class="tb-val">${fmt(it.value)}</span></div>`;
+      }).join('') || '<div class="tb-meta">—</div>'}
+      <div class="tb-side-total">Total: ${fmt(s.got.total)}</div>
+    </div>`;
+  });
+
+  html += `</div>`;
+
+  const verdict = winner
+    ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(pct * 100)}%</span>`
+    : `<span class="tx-add">Even — fair deal</span>`;
+
+  html += `<div class="tx-line th-foot">${verdict}`;
+  if (opts.becameToggle && hasPicks) {
+    html += `<button class="tb-add-btn" onclick="tradeHistToggle('${tr.id}')">${became ? '← Flip back' : 'See what picks became →'}</button>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
 function tradeHistoryHtml() {
   const th = state.tradeHistory;
-  const M = buildValueModel();
-  const fmt = v => Math.round(v).toLocaleString();
-
   if (!th || !th.trades.length) {
     return '<div class="empty">No completed trades found in your league history.</div>';
   }
 
+  const M = buildValueModel();
   let html = `<div class="section-label" style="margin-top:0;">Trade History</div>`;
   html += `<div class="coach-sub">Every completed trade across your dynasty, graded with current values (${valueSourceLabel()}, hindsight). For trades with picks, reveal what they became.</div>`;
 
   let lastSeason = null;
-
   th.trades.forEach(tr => {
     if (tr.season !== lastSeason) {
       html += `<div class="detail-title">${tr.season} Season</div>`;
       lastSeason = tr.season;
     }
-
-    const became = !!state.tradeHistoryOpen[tr.id];
-    const hasPicks = tr.draft_picks.some(p => {
-      const r = resolveHistPick(th, p.season, p.round, p.roster_id);
-      return r && r.playerId;
-    });
-
-    const sides = tr.rosterIds.map(rid => {
-      const got = histSide(tr, rid, th, became, M);
-      const sent = histSent(tr, rid, th, became, M);
-      return { rid: String(rid), got: got, net: got.total - sent };
-    });
-
-    const totals = sides.map(s => s.got.total);
-    const hi = Math.max.apply(null, totals), lo = Math.min.apply(null, totals);
-    const gradePct = hi > 0 ? (hi - lo) / hi : 0;   // grade input (short side vs larger)
-    const pct = wonByPct(hi, lo);                    // display "won by"
-    const winner = pct >= 0.05 ? sides.slice().sort((a,b) => b.net - a.net)[0] : null;
-    const grade = tbGrade(-gradePct);
-    const date = tr.date ? new Date(tr.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
-
-    html += `<div class="tx-card">
-      <div class="tx-top">
-        <span class="tx-date">${date}${became ? ' <span class="tx-badge trade">what it became</span>' : ''}</span>
-        <span style="margin-left:auto">Grade: <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span></span>
-      </div>
-      <div class="th-sides">`;
-
-    sides.forEach(s => {
-      const win = winner && winner.rid === s.rid;
-      html += `<div class="th-side">
-        <div class="th-side-name">${histName(th, tr.leagueId, s.rid)}${win ? ' <span class="th-w">W</span>' : ''}</div>
-        ${s.got.items.map(it => `<div class="tb-row"><span>${it.pos ? `<span class="pos-badge pos-${String(it.pos).toLowerCase()}">${it.pos}</span> ` : ''}${it.pid ? pLink(it.pid) : escHtml(it.label)}</span><span class="tb-val">${fmt(it.value)}</span></div>`).join('') || '<div class="tb-meta">—</div>'}
-        <div class="tb-side-total">Total: ${fmt(s.got.total)}</div>
-      </div>`;
-    });
-
-    html += `</div>`;
-
-    const verdict = winner
-      ? `<span>${histName(th, tr.leagueId, winner.rid)} won by ${Math.round(pct * 100)}%</span>`
-      : `<span class="tx-add">Even — fair deal</span>`;
-
-    html += `<div class="tx-line th-foot">${verdict}`;
-    if (hasPicks) {
-      html += `<button class="tb-add-btn" onclick="tradeHistToggle('${tr.id}')">${became ? '← Flip back' : 'See what picks became →'}</button>`;
-    }
-    html += `</div></div>`;
+    html += tradeCardHtml(tr, { M: M, becameToggle: true });
   });
 
   return html;
@@ -3249,10 +3389,8 @@ function playerHistory(pid) {
       const nmMap = th.nameByLeague[t.leagueId] || {};
       const nameOf = rid => nmMap[String(rid)] || teamName(rid);
       if (t.type === 'trade') {
-        if (t.adds[pid] != null) {
-          const from = t.drops[pid] != null ? nameOf(t.drops[pid]) : null;
-          events.push({ date: t.date, sort: 3, tag: 'Trade',
-            text: from ? ('Traded from ' + from + ' to ' + nameOf(t.adds[pid])) : ('Traded to ' + nameOf(t.adds[pid])) });
+        if (t.adds[pid] != null || t.drops[pid] != null) {
+          events.push({ date: t.date, sort: 3, isTrade: true, tr: t });
         }
       } else if (t.adds[pid] != null) {
         const bid = t.settings && t.settings.waiver_bid != null ? ' ($' + t.settings.waiver_bid + ')' : '';
@@ -3335,6 +3473,10 @@ function playerCardHtml(pid) {
 
   html += `<div class="pc-timeline">`;
   events.forEach(e => {
+    if (e.isTrade) {
+      html += `<div class="pc-trade">${tradeCardHtml(e.tr, { M: M, highlightPid: pid })}</div>`;
+      return;
+    }
     const when = e.dateText || (e.date ? new Date(e.date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '');
     html += `<div class="pc-event">
       <div class="pc-when">${escHtml(when)}</div>
@@ -3427,12 +3569,12 @@ async function loadDraftOrder() {
 }
 
 function renderDraftOrder() {
-  document.getElementById('mainContent').innerHTML = `
+  draftBody().innerHTML = `
     <div class="section-label">${state.league && state.league.season ? Number(state.league.season) + 1 : ''} Rookie Draft Order</div>
     <div id="draftOrderArea"><div class="status"><div class="spinner"></div><p>Crunching points possible…</p></div></div>
   `;
   loadDraftOrder().then(() => {
-    if (state.activeTab !== 'standings') return;
+    if (state.activeTab !== 'draft' || state.draftMode !== 'order') return;
     const el = document.getElementById('draftOrderArea');
     if (el) el.innerHTML = draftOrderHtml();
   }).catch(e => {
@@ -4200,10 +4342,10 @@ function applyLeagueChange() {
   const notesUnlocked = state.notesUnlocked;
   state = freshState();
   state.notesUnlocked = notesUnlocked;
-  state.activeTab = 'board';
+  state.activeTab = 'draft';
 
   document.querySelectorAll('.tab').forEach(button => {
-    button.classList.toggle('active', button.dataset.tab === 'board');
+    button.classList.toggle('active', button.dataset.tab === 'draft');
   });
 
   init();
