@@ -1828,13 +1828,27 @@ function ktcNameKey(name) {
     .replace(/[^a-z]/g, '');
 }
 
-// Values blend two sources: FantasyCalc's public API (the scale anchor) and theffdynasty's
-// crowd-comparison rankings. theffdynasty scores are on an ELO-style scale, so we map each
-// of its players by rank onto FantasyCalc's value curve, then average the two — giving a
-// value that reflects both sites on FantasyCalc's familiar scale. Picks come from
-// FantasyCalc (its pick scale already matches the blended player scale).
+// Values blend up to three sources: FantasyCalc's public API (the scale anchor, and where
+// pick values + win-now come from), theffdynasty's crowd-comparison rankings, and
+// DynastyProcess's published value feed. The two secondary sources sit on different scales,
+// so each is mapped by rank onto FantasyCalc's value curve, then all present sources are
+// averaged — a value reflecting every site on FantasyCalc's familiar scale.
 const FF_SUPA_URL = 'https://hkdfsupummsdqdjfezwh.supabase.co/rest/v1/calculated_rankings';
 const FF_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrZGZzdXB1bW1zZHFkamZlendoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzOTg1MjAsImV4cCI6MjA3NTk3NDUyMH0.LASpdlCnftonrj4HBwr6eHkvLRGSbFT9iJ79_whAAXY';
+const DP_VALUES_URL = 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/values.csv';
+
+// Map a {pid: score} table onto a sorted descending list of FantasyCalc values, by rank.
+function rankMapOntoFc(scoreByPid, fcValsDesc) {
+  const out = {};
+  const items = Object.keys(scoreByPid).map(pid => [pid, scoreByPid[pid]]).sort((a,b) => b[1] - a[1]);
+  const n = items.length, nfc = fcValsDesc.length;
+  if (!n || !nfc) return out;
+  items.forEach((it, i) => {
+    const idx = n <= 1 ? 0 : Math.min(nfc - 1, Math.round(i / (n - 1) * (nfc - 1)));
+    out[it[0]] = fcValsDesc[idx];
+  });
+  return out;
+}
 
 async function loadValues() {
   const s = state;
@@ -1844,15 +1858,15 @@ async function loadValues() {
   const numTeams = s.rosters.length || 12;
   const rec = s.league && s.league.scoring_settings && s.league.scoring_settings.rec;
   const ppr = (rec == null ? 1 : rec);
-  const fcUrl = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=' +
-    numQbs + '&numTeams=' + numTeams + '&ppr=' + ppr;
-
   const sf = isSuperflex();
   const tePrem = !!(s.league && s.league.scoring_settings && s.league.scoring_settings.bonus_rec_te);
+
+  const fcUrl = 'https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=' +
+    numQbs + '&numTeams=' + numTeams + '&ppr=' + ppr;
   const ffFormat = sf ? (tePrem ? 'dynasty-sf-ppr-tep' : 'dynasty-sf-ppr') : 'dynasty-1qb-ppr-tep';
   const ffUrl = FF_SUPA_URL + '?format_id=eq.' + ffFormat + '&select=player_id,score&limit=3000';
 
-  // FantasyCalc is the scale anchor; theffdynasty is best-effort.
+  // FantasyCalc is the scale anchor (required); the other two are best-effort.
   let fcRows;
   try {
     fcRows = await fetchJSON(fcUrl);
@@ -1862,11 +1876,21 @@ async function loadValues() {
     return failed;
   }
 
-  let ffRows = null;
-  try {
-    const r = await fetch(ffUrl, { headers: { apikey: FF_ANON_KEY, Authorization: 'Bearer ' + FF_ANON_KEY } });
-    if (r.ok) ffRows = await r.json();
-  } catch (e) { ffRows = null; }
+  let ffRows = null, dpText = null;
+  await Promise.all([
+    (async () => {
+      try {
+        const r = await fetch(ffUrl, { headers: { apikey: FF_ANON_KEY, Authorization: 'Bearer ' + FF_ANON_KEY } });
+        if (r.ok) ffRows = await r.json();
+      } catch (e) { ffRows = null; }
+    })(),
+    (async () => {
+      try {
+        const r = await fetch(DP_VALUES_URL);
+        if (r.ok) dpText = await r.text();
+      } catch (e) { dpText = null; }
+    })()
+  ]);
 
   const fc = {};
   const picks = {};
@@ -1877,37 +1901,54 @@ async function loadValues() {
     fc[String(p.sleeperId)] = { value: row.value || 0, redraft: (row.redraftValue != null ? row.redraftValue : row.value) || 0 };
   });
 
-  // Map theffdynasty scores onto FantasyCalc's value distribution by rank (quantile), so
-  // both sources share one scale before averaging.
-  const ffScaled = {};
-  if (ffRows && ffRows.length) {
-    const fcValsDesc = Object.keys(fc).map(k => fc[k].value).sort((a,b) => b - a);
-    const nfc = fcValsDesc.length;
-    const ffItems = ffRows
-      .filter(r => /^\d+$/.test(String(r.player_id)) && s.players[String(r.player_id)])
-      .map(r => [String(r.player_id), r.score])
-      .sort((a,b) => b[1] - a[1]);
-    const nff = ffItems.length;
-    if (nfc && nff) {
-      ffItems.forEach((it, i) => {
-        const idx = nff <= 1 ? 0 : Math.min(nfc - 1, Math.round(i / (nff - 1) * (nfc - 1)));
-        ffScaled[it[0]] = fcValsDesc[idx];
-      });
-    }
+  const fcValsDesc = Object.keys(fc).map(k => fc[k].value).sort((a,b) => b - a);
+
+  // name+pos -> sleeper id, for the CSV source
+  const nameIdx = {};
+  Object.keys(s.players).forEach(pid => {
+    const p = s.players[pid];
+    if (!p || ['QB','RB','WR','TE'].indexOf(p.position) === -1) return;
+    const k = ktcNameKey(p.full_name) + '|' + p.position;
+    if (!(k in nameIdx) || (p.active && p.team)) nameIdx[k] = pid;
+  });
+
+  // theffdynasty scores keyed by Sleeper id
+  const ffScore = {};
+  (ffRows || []).forEach(r => {
+    const pid = String(r.player_id);
+    if (/^\d+$/.test(pid) && s.players[pid]) ffScore[pid] = r.score;
+  });
+
+  // DynastyProcess values keyed to Sleeper id by name
+  const dpScore = {};
+  if (dpText) {
+    const col = sf ? 'value_2qb' : 'value_1qb';
+    parseCsv(dpText).forEach(row => {
+      if (['QB','RB','WR','TE'].indexOf(row.pos) === -1) return;
+      const pid = nameIdx[ktcNameKey(row.player) + '|' + row.pos];
+      const v = Number(row[col]) || 0;
+      if (pid && v) dpScore[pid] = v;
+    });
   }
+
+  const ffScaled = rankMapOntoFc(ffScore, fcValsDesc);
+  const dpScaled = rankMapOntoFc(dpScore, fcValsDesc);
 
   const sources = ['FantasyCalc'];
   if (Object.keys(ffScaled).length) sources.push('theffdynasty');
+  if (Object.keys(dpScaled).length) sources.push('DynastyProcess');
 
   const byId = {};
   const allPids = {};
-  Object.keys(fc).forEach(pid => allPids[pid] = 1);
-  Object.keys(ffScaled).forEach(pid => allPids[pid] = 1);
+  [fc, ffScaled, dpScaled].forEach(map => Object.keys(map).forEach(pid => allPids[pid] = 1));
   Object.keys(allPids).forEach(pid => {
     if (!s.players[pid]) return;
-    const a = ffScaled[pid];
-    const b = fc[pid] ? fc[pid].value : undefined;
-    const value = (a != null && b != null) ? (a + b) / 2 : (b != null ? b : a);
+    const parts = [];
+    if (fc[pid]) parts.push(fc[pid].value);
+    if (ffScaled[pid] != null) parts.push(ffScaled[pid]);
+    if (dpScaled[pid] != null) parts.push(dpScaled[pid]);
+    if (!parts.length) return;
+    const value = parts.reduce((a,b) => a + b, 0) / parts.length;
     byId[pid] = { value: value, redraft: fc[pid] ? fc[pid].redraft : value, posRank: null };
   });
 
