@@ -700,6 +700,7 @@ body.modal-open { overflow:hidden; }
 .lr-players { padding:6px 8px 10px 44px; display:flex; flex-direction:column; gap:5px; }
 .lr-prow { display:flex; justify-content:space-between; gap:10px; font-size:.85rem; padding:3px 0; border-top:1px solid rgba(30,39,64,.5); }
 .lr-prow:first-child { border-top:none; }
+.lr-sep { font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:8px 0 2px; }
 /* A forced display on the content overrides the browser's <details> collapse, so hide it
    explicitly when the category/row is closed. */
 .lr-cat:not([open]) > .lr-list, .lr-rowd:not([open]) > .lr-players { display:none !important; }
@@ -1100,6 +1101,7 @@ function freshState() {
     alBench:(function(){ try { return localStorage.getItem('ff.alBench') === '1'; } catch(e) { return false; } })(),
     alBenchN:(function(){ try { return parseInt(localStorage.getItem('ff.alBenchN'), 10) || 1; } catch(e) { return 1; } })(),
     alFocus:(function(){ try { return localStorage.getItem('ff.alFocus') || ''; } catch(e) { return ''; } })(),
+    alSort:(function(){ try { return localStorage.getItem('ff.alSort') === 'lineup' ? 'lineup' : 'rating'; } catch(e) { return 'rating'; } })(),
     userByRosterId:{},
     draftDetails:{},
     draftPicksBySeason:{},
@@ -2728,14 +2730,30 @@ function leagueStarters(players, M) {
   return picked;
 }
 
-// The players counted for a team+category, listed with their full (blended) rating.
-function lrPlayerList(pids, M) {
-  const rows = (pids || []).slice().sort((a,b) => M.dynValue(b) - M.dynValue(a)).map(pid => {
-    const p = state.players[String(pid)] || {};
-    const pos = p.position || '';
-    return `<div class="lr-prow"><span>${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}${pLink(pid)}</span><span class="tb-val">${Math.round(M.dynValue(pid)).toLocaleString()}</span></div>`;
-  }).join('');
-  return `<div class="lr-players">${rows || '<div class="tb-meta">—</div>'}</div>`;
+function lrPlayerRow(pid, M) {
+  const p = state.players[String(pid)] || {};
+  const pos = p.position || '';
+  return `<div class="lr-prow"><span>${pos ? `<span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span> ` : ''}${pLink(pid)}</span><span class="tb-val">${Math.round(M.dynValue(pid)).toLocaleString()}</span></div>`;
+}
+
+// The players counted for a team+category, at full rating. Sort mode ('rating' = highest→lowest,
+// or 'lineup' = starters in lineup order, then the qualified bench grouped by position).
+function lrPlayerList(starters, bench, M) {
+  starters = starters || []; bench = bench || [];
+  let out = '';
+  if ((state.alSort || 'rating') === 'lineup') {
+    out += starters.map(pid => lrPlayerRow(pid, M)).join('');
+    const byPos = {};
+    bench.forEach(pid => { const p = playerPositionOf(pid); (byPos[p] = byPos[p] || []).push(pid); });
+    let benchHtml = '';
+    ['QB','RB','WR','TE'].forEach(p => {
+      (byPos[p] || []).sort((a,b) => M.dynValue(b) - M.dynValue(a)).forEach(pid => benchHtml += lrPlayerRow(pid, M));
+    });
+    if (benchHtml) out += `<div class="lr-sep">Bench</div>` + benchHtml;
+  } else {
+    out = starters.concat(bench).sort((a,b) => M.dynValue(b) - M.dynValue(a)).map(pid => lrPlayerRow(pid, M)).join('');
+  }
+  return `<div class="lr-players">${out || '<div class="tb-meta">—</div>'}</div>`;
 }
 
 // One collapsible category. rows = [{rid, value, pids}]. Collapsed by default; the header shows
@@ -2763,7 +2781,7 @@ function lrCategoryHtml(title, rows, focusRid, M) {
       <span class="lr-name">${escHtml(teamName(row.rid))}</span>
       <span class="lr-val">${Math.round(row.value).toLocaleString()}</span>
       <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
-    </summary>${lrPlayerList(row.pids, M)}</details>`;
+    </summary>${lrPlayerList(row.starters, row.bench, M)}</details>`;
   });
   return h + `</div></details>`;
 }
@@ -2782,6 +2800,11 @@ function alSetBenchN(n) {
 function alSetFocus(rid) {
   state.alFocus = String(rid || '');
   try { localStorage.setItem('ff.alFocus', state.alFocus); } catch(e) {}
+  alRerender();
+}
+function alSetSort(mode) {
+  state.alSort = (mode === 'lineup') ? 'lineup' : 'rating';
+  try { localStorage.setItem('ff.alSort', state.alSort); } catch(e) {}
   alRerender();
 }
 function alRerender() {
@@ -2812,22 +2835,22 @@ function leagueReport(myRid) {
     const starterSet = {}; starterPids.forEach(pid => starterSet[pid] = 1);
 
     // Per-position categories: that position's starters (incl. any who fill FLEX/SF) + top N backups.
-    const pool = {}, posVal = {};
+    const posStartersMap = {}, posBackupsMap = {}, posVal = {};
     POS.forEach(p => {
       const posStarters = byPos[p].filter(pid => starterSet[pid]);
       const backups = byPos[p].filter(pid => !starterSet[pid]).slice(0, benchN);
-      pool[p] = posStarters.concat(backups);
-      posVal[p] = pool[p].reduce((s,pid) => s + M.dynValue(pid), 0);
+      posStartersMap[p] = posStarters;
+      posBackupsMap[p] = backups;
+      posVal[p] = posStarters.concat(backups).reduce((s,pid) => s + M.dynValue(pid), 0);
     });
 
     // Overall roster: full starting lineup + the top N bench players TOTAL (across positions),
     // each at their full rating (no backup discount).
     const benchPids = players.filter(pid => !starterSet[pid])
       .sort((a,b) => M.dynValue(b) - M.dynValue(a)).slice(0, benchN);
-    const overallPids = starterPids.concat(benchPids);
-    const overall = overallPids.reduce((s,pid) => s + M.dynValue(pid), 0);
+    const overall = starterPids.concat(benchPids).reduce((s,pid) => s + M.dynValue(pid), 0);
 
-    return { rid, pool, posVal, overall, overallPids };
+    return { rid, posStartersMap, posBackupsMap, posVal, overall, overallStarters: starterPids, overallBench: benchPids };
   });
 
   if (!teams.length) return '<div class="empty">No teams found.</div>';
@@ -2839,16 +2862,21 @@ function leagueReport(myRid) {
     .sort((a,b) => teamName(a).localeCompare(teamName(b)))
     .map(rid => `<option value="${rid}" ${rid === focusRid ? 'selected' : ''}>${teamName(rid)}</option>`).join('');
 
+  const sortMode = (state.alSort === 'lineup') ? 'lineup' : 'rating';
   let html = `<div class="coach-sub">How all ${teams.length} teams rank, by overall roster and by position (${depthNote}), using each player's full rating. Grades are vs the league average. Tap a category to open it, and a team to see who's counted.</div>`;
   html += `<div class="lr-controls">
       <label class="lr-nlabel">Show ranking for <select class="lr-focus" onchange="alSetFocus(this.value)">${teamOpts}</select></label>
+      <label class="lr-nlabel">Player order <select class="lr-focus" onchange="alSetSort(this.value)">
+        <option value="rating" ${sortMode === 'rating' ? 'selected' : ''}>By rating</option>
+        <option value="lineup" ${sortMode === 'lineup' ? 'selected' : ''}>Starters first</option>
+      </select></label>
       <label class="lr-toggle"><input type="checkbox" ${state.alBench ? 'checked' : ''} onchange="alSetBench(this.checked)"> Include bench depth</label>
       ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" max="15" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
     </div>`;
 
-  html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, pids: t.overallPids })), focusRid, M);
+  html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, starters: t.overallStarters, bench: t.overallBench })), focusRid, M);
   POS.forEach(p => {
-    html += lrCategoryHtml(p, teams.map(t => ({ rid: t.rid, value: t.posVal[p], pids: t.pool[p] })), focusRid, M);
+    html += lrCategoryHtml(p, teams.map(t => ({ rid: t.rid, value: t.posVal[p], starters: t.posStartersMap[p], bench: t.posBackupsMap[p] })), focusRid, M);
   });
   return html;
 }
