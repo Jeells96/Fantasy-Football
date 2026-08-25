@@ -731,6 +731,17 @@ body.modal-open { overflow:hidden; }
 
 .trade-assets { font-size:.9rem; }
 
+.trade-calc-line {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:'DM Mono', monospace;
+  font-size:.78rem;
+  color:var(--muted);
+  border-top:1px solid var(--border);
+  margin-top:10px;
+  padding-top:10px;
+}
 .trade-why {
   font-size:.84rem;
   color:var(--muted);
@@ -2970,6 +2981,27 @@ function tradeViable(team, lose, gain, picksOut, picksIn, M) {
     : futureAfter >= team.future * 1.01;
 }
 
+// Grade a proposed 2-team deal exactly like the Trade Calculator: net value (full ratings +
+// DynastyCalc picks) plus the zero-sum Value Adjustment (consolidation premium). getN/giveN are
+// the raw received totals for me/other; gp,gk = players/picks I get, sp,sk = what I send.
+function suggestionGrade(getN, giveN, gp, gk, sp, sk, M) {
+  const recvMe = gp.map(p => M.dynValue(p)).concat(gk.map(k => k.value));
+  const recvOther = sp.map(p => M.dynValue(p)).concat(sk.map(k => k.value));
+  const creditMe = valueAdjustment(recvMe, sp.length + sk.length);       // I gave (sp+sk) pieces
+  const creditOther = valueAdjustment(recvOther, gp.length + gk.length); // they gave (gp+gk) pieces
+  const adjMe = creditMe - creditOther;                                  // zero-sum transfer (2-team)
+  // Effective "gets" totals, exactly like the Trade Builder's 2-team evaluator.
+  const effMe = getN + adjMe;
+  const effOther = giveN - adjMe;
+  const wonBy = wonByPct(Math.max(effMe, effOther), Math.min(effMe, effOther));
+  const netPctMe = (effMe - effOther) / Math.max(effMe, effOther, 1);
+  const netPctOther = (effOther - effMe) / Math.max(effMe, effOther, 1);
+  const grade = tbGrade(Math.min(netPctMe, netPctOther));
+  // Match the builder's display: anything within 5% reads as an even, fair deal.
+  return { adjMe: adjMe, wonBy: wonBy, grade: grade,
+    favors: wonBy <= 0.05 ? 'even' : (effMe > effOther ? 'me' : 'other') };
+}
+
 function findTrades(meId, league, limit) {
   const M = league.M;
   const me = league.teams[String(meId)];
@@ -3001,9 +3033,10 @@ function findTrades(meId, league, limit) {
         const giveN = sp.reduce((s,p) => s + M.dynValue(p), 0) + sk.reduce((s,p) => s + p.value, 0);
         if (giveN <= 0) return;
 
-        // Fair on a neutral dynasty board, and never a recommendation to overpay.
-        if (Math.abs(giveN - getN) / Math.max(giveN, getN) > 0.15) return;
-        if (getN < giveN * 0.90) return;
+        // Only suggest deals the Trade Calculator itself rates fair (net + value adjustment),
+        // so a suggestion never looks lopsided when you open it in the calculator.
+        const calc = suggestionGrade(getN, giveN, gp, gk, sp, sk, M);
+        if (calc.wonBy > 0.06) return;
         if (sp.length && !sp.some(p => teamWants(other, p, M))) return;
 
         const myGain = gp.reduce((s,p) => s + valueTo(me,p,M), 0) + gk.reduce((s,p) => s + p.value*me.pickMult, 0)
@@ -3016,7 +3049,7 @@ function findTrades(meId, league, limit) {
         if (!tradeViable(other, gp, sp, gk, sk, M)) return;
 
         out.push({ otherId:String(otherId), gp, gk, sp, sk, myGain, thGain,
-                   score: Math.min(myGain, thGain), getN, giveN });
+                   score: Math.min(myGain, thGain), getN, giveN, calc: calc });
       });
     });
   });
@@ -3196,6 +3229,10 @@ function coachReport(rosterId) {
             <span class="trade-arrow give">You send</span>
             <span class="trade-assets">${packageHtml(t.sp, t.sk, M)}</span>
           </div>
+          ${t.calc ? `<div class="trade-calc-line">Trade Calculator: <span class="tb-grade ${tbGradeClass(t.calc.grade)}">${t.calc.grade}</span> <span class="tb-meta">${
+            t.calc.favors === 'even' ? 'Even — fair for both'
+            : (t.calc.favors === 'other' ? teamName(t.otherId) + ' +' + Math.round(t.calc.wonBy * 100) + '%'
+            : 'You +' + Math.round(t.calc.wonBy * 100) + '%')}</span></div>` : ''}
           <div class="trade-why">${tradeRationale(t, me, other, M)}</div>
         </div>
       `;
