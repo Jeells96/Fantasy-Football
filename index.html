@@ -2755,12 +2755,8 @@ function lrPlayerList(starters, bench, M) {
   let out = '';
   if ((state.alSort || 'rating') === 'lineup') {
     out += starters.map(pid => lrPlayerRow(pid, M)).join('');
-    const byPos = {};
-    bench.forEach(pid => { const p = playerPositionOf(pid); (byPos[p] = byPos[p] || []).push(pid); });
-    let benchHtml = '';
-    ['QB','RB','WR','TE'].forEach(p => {
-      (byPos[p] || []).sort((a,b) => M.dynValue(b) - M.dynValue(a)).forEach(pid => benchHtml += lrPlayerRow(pid, M));
-    });
+    // Bench: highest value to lowest, regardless of position.
+    const benchHtml = bench.slice().sort((a,b) => M.dynValue(b) - M.dynValue(a)).map(pid => lrPlayerRow(pid, M)).join('');
     if (benchHtml) out += `<div class="lr-sep">Bench</div>` + benchHtml;
   } else {
     out = starters.concat(bench).sort((a,b) => M.dynValue(b) - M.dynValue(a)).map(pid => lrPlayerRow(pid, M)).join('');
@@ -2804,7 +2800,7 @@ function alSetBench(on) {
   alRerender();
 }
 function alSetBenchN(n) {
-  n = Math.max(0, Math.min(15, parseInt(n, 10) || 0));
+  n = Math.max(0, Math.min(40, parseInt(n, 10) || 0));
   state.alBenchN = n;
   try { localStorage.setItem('ff.alBenchN', String(n)); } catch(e) {}
   alRerender();
@@ -2883,7 +2879,7 @@ function leagueReport(myRid) {
         <option value="lineup" ${sortMode === 'lineup' ? 'selected' : ''}>Starters first</option>
       </select></label>
       <label class="lr-toggle"><input type="checkbox" ${state.alBench ? 'checked' : ''} onchange="alSetBench(this.checked)"> Include bench depth</label>
-      ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" max="15" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
+      ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" max="40" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
     </div>`;
 
   html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, starters: t.overallStarters, bench: t.overallBench })), focusRid, M);
