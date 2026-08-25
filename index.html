@@ -2800,7 +2800,7 @@ function alSetBench(on) {
   alRerender();
 }
 function alSetBenchN(n) {
-  n = Math.max(0, Math.min(40, parseInt(n, 10) || 0));
+  n = Math.max(0, parseInt(n, 10) || 0);   // no upper cap — slice limits to the real bench size
   state.alBenchN = n;
   try { localStorage.setItem('ff.alBenchN', String(n)); } catch(e) {}
   alRerender();
@@ -2879,7 +2879,7 @@ function leagueReport(myRid) {
         <option value="lineup" ${sortMode === 'lineup' ? 'selected' : ''}>Starters first</option>
       </select></label>
       <label class="lr-toggle"><input type="checkbox" ${state.alBench ? 'checked' : ''} onchange="alSetBench(this.checked)"> Include bench depth</label>
-      ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" max="40" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
+      ${state.alBench ? `<label class="lr-nlabel">Bench players <input class="lr-nin" type="number" min="0" value="${state.alBenchN}" onchange="alSetBenchN(this.value)"></label>` : ''}
     </div>`;
 
   html += lrCategoryHtml('Overall Roster', teams.map(t => ({ rid: t.rid, value: t.overall, starters: t.overallStarters, bench: t.overallBench })), focusRid, M);
