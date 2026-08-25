@@ -893,7 +893,8 @@ body.modal-open { overflow:hidden; }
 .tx-head .tb-grade { margin-left:auto; }
 .th-sides { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 14px; margin:0; }
 @media (max-width:560px){ .th-sides { grid-template-columns:1fr; } }
-.th-side-name { font-weight:600; margin-bottom:6px; }
+.th-side-name { font-weight:600; margin-bottom:6px; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+.tb-grade.side-grade { font-size:1.15rem; }
 .th-w { background:var(--green); color:#000; font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:3px; padding:1px 5px; }
 .th-foot { display:flex; align-items:center; gap:10px; padding:10px 14px; margin:0; border-top:1px solid var(--border); }
 .th-foot .tb-add-btn { margin-left:auto; }
@@ -4079,20 +4080,23 @@ function tradeCardHtml(tr, opts) {
     ? `<span class="tx-badge frozen" title="Grade locked at trade value — won't change">Final</span>`
     : (pending ? `<span class="tx-badge pending" title="Locks once the traded pick is drafted">Pending</span>` : '');
 
+  // Per-side letter grade: how the deal graded for THAT side (winner ~A+, the shorted side lower).
+  const sideGrade = s => tbGrade(s.net / Math.max(s.total, s.sent, 1));
+
   let html = `<div class="tx-card tx-trade ${spineCls}${pending ? ' pending' : ''}">
     <div class="tx-head">
       <span class="tx-matchup">${matchup}</span>
       <span class="tx-date">${date}</span>
       ${statusBadge}
       ${pending ? '' : winPill}
-      <span class="tb-grade ${tbGradeClass(grade)}">${grade}</span>
     </div>
     <div class="th-sides">`;
 
   sides.forEach(s => {
     const win = winner && String(winner.rid) === String(s.rid);
+    const g = sideGrade(s);
     html += `<div class="th-side">
-      <div class="th-side-name">${escHtml(nameOf(s))}${win ? ' <span class="th-w">W</span>' : ''}</div>
+      <div class="th-side-name">${escHtml(nameOf(s))} <span class="tb-grade side-grade ${tbGradeClass(g)}">${g}</span>${win ? ' <span class="th-w">W</span>' : ''}</div>
       ${(s.items || []).map(it => {
         const nameHtml = it.pid ? pLink(it.pid) : escHtml(it.label);
         const rowCls = (hl && String(it.pid) === hl) ? ' pc-hl' : '';
