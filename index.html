@@ -867,7 +867,13 @@ body.modal-open { overflow:hidden; }
 .tb-pcard:hover { border-color:var(--accent); }
 .tb-pcard.added { opacity:.5; cursor:default; }
 .tb-pcard.added:hover { border-color:var(--border); }
-.tb-pcard-top { display:flex; align-items:center; gap:4px; }
+.tb-pcard-top { display:flex; align-items:center; gap:4px; min-width:0; }
+.tb-pcard-top .tb-val { flex:none; white-space:nowrap; }
+.tb-cols { scrollbar-width:thin; }
+@media (max-width:560px) {
+  .tb-cols { scroll-snap-type:x proximity; }
+  .tb-col { flex:0 0 calc(100% - 2px); scroll-snap-align:start; }
+}
 .tb-pcard-name { font-weight:600; font-size:.9rem; margin-top:3px; }
 .pos-badge { font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:4px; padding:1px 5px; letter-spacing:.5px; }
 .pos-qb { background:rgba(232,74,106,.2); color:#e8607f; }
@@ -2493,7 +2499,7 @@ function pickValue(year, round, overall, numTeams) {
     const dcTier = picks[year + ' ' + tier + ' ' + ord + ' Round'];
     if (dcTier != null) return dcTier;
     const dcMid = picks[year + ' Mid ' + ord + ' Round'];
-    if (dcMid != null) return dcMid;
+    if (dcMid != null) return overall ? Math.round(dcMid * (tier === 'Early' ? 1.18 : tier === 'Late' ? 0.82 : 1)) : dcMid;
   }
 
   // FantasyCalc-style fallback
@@ -2508,7 +2514,7 @@ function pickValue(year, round, overall, numTeams) {
     const tiered = picks[year + ' ' + ord + ' (' + tier + ')'];
     if (tiered != null) return tiered;
     const generic = picks[year + ' ' + ord];
-    if (generic != null) return generic;
+    if (generic != null) return overall ? Math.round(generic * (tier === 'Early' ? 1.18 : tier === 'Late' ? 0.82 : 1)) : generic;
   }
 
   // Rounds DynastyCalc doesn't list (6th+): decay from the 5th (already tiny) so a deeper
@@ -2574,11 +2580,38 @@ function valueAdjustment(receivedValues, piecesGiven) {
   return Math.round(top * vaStudWeight(top) * VA_RATE * Math.min(gap, VA_GAP_CAP));
 }
 
+function estimatedPickSlots(year) {
+  const nextSeason = Number(state.league && state.league.season) + 1;
+  const d = state.draftOrder;
+  if (Number(year) !== nextSeason || !d || !d.stats) return null;
+  const ids = state.rosters.map(r => String(r.roster_id));
+  if (!ids.some(id => d.stats[id] && d.stats[id].weeks > 0)) return null;
+  const pp = id => d.stats[id] ? d.stats[id].possible : 0;
+  const wb = d.winners || [];
+  const champMatch = wb.find(m => m.p === 1);
+  const champ = champMatch && champMatch.w ? String(champMatch.w) : null;
+  const runner = champMatch && champ ? [champMatch.t1, champMatch.t2].map(String).find(id => id !== champ) : null;
+  let sorted;
+  if (champ && runner) {
+    const playoff = new Set();
+    wb.filter(m => (m.r || 1) === 1).forEach(m => [m.t1,m.t2].forEach(id => { if (id) playoff.add(String(id)); }));
+    const non = ids.filter(id => !playoff.has(id)).sort((a,b) => pp(a)-pp(b));
+    const semi = ids.filter(id => playoff.has(id) && id !== champ && id !== runner).sort((a,b) => pp(a)-pp(b));
+    sorted = non.concat(semi, [runner,champ]);
+  } else sorted = ids.slice().sort((a,b) => pp(a)-pp(b));
+  return Object.fromEntries(sorted.map((id,i) => [id, i+1]));
+}
+
 function coachPicks(rosterId) {
   const nt = state.rosters.length || 12;
   return getAllOwnedPicks(rosterId).map(p => {
     const ord = ROUND_ORD[p.round];
-    const base = p.exactSlot ? (p.year + ' ' + p.exactSlot) : (p.year + ' ' + (ord || ('R' + p.round)));
+    const estimates = !p.exactSlot ? estimatedPickSlots(p.year) : null;
+    const projectedSlot = estimates && estimates[String(p.originalRosterId)];
+    const overall = p.overall || (projectedSlot ? (p.round - 1) * nt + projectedSlot : null);
+    const slotLabel = projectedSlot ? p.round + '.' + String(projectedSlot).padStart(2, '0') : '';
+    const base = p.exactSlot ? (p.year + ' ' + p.exactSlot + ' · Sleeper draft order') :
+      slotLabel ? (p.year + ' ' + slotLabel + ' · estimated') : (p.year + ' ' + (ord || ('R' + p.round)) + ' · order TBD');
     // Multiple identical future picks (e.g. two 2027 1sts) are distinguished by their
     // original team, and get a unique id so each can be added to a trade independently.
     return {
@@ -2587,8 +2620,8 @@ function coachPicks(rosterId) {
       via: String(p.originalRosterId) !== String(rosterId) ? p.origName : '',
       year: p.year,
       round: p.round,
-      overall: p.overall,
-      value: pickValue(p.year, p.round, p.overall, nt)
+      overall: overall,
+      value: pickValue(p.year, p.round, overall, nt)
     };
   }).sort((a,b) => b.value - a.value);
 }
@@ -3318,9 +3351,18 @@ function tbRender() {
   const anchor = document.getElementById('tbSearchInput');
   const anchorTop = anchor ? anchor.getBoundingClientRect().top : null;
   const y = window.scrollY;
+  const oldColumns = document.querySelectorAll('#coachBody .tb-col-body');
+  const columnScrolls = Array.from(oldColumns, col => col.scrollTop);
+  const oldStrip = document.querySelector('#coachBody .tb-cols');
+  const stripScroll = oldStrip ? oldStrip.scrollLeft : 0;
   const searchFocused = anchor && document.activeElement === anchor;
 
   body.innerHTML = tradeBuilderHtml();
+  const newStrip = document.querySelector('#coachBody .tb-cols');
+  if (newStrip) newStrip.scrollLeft = stripScroll;
+  document.querySelectorAll('#coachBody .tb-col-body').forEach((col, i) => {
+    col.scrollTop = columnScrolls[i] || 0;
+  });
 
   if (searchFocused) {
     const inp = document.getElementById('tbSearchInput');
@@ -3574,6 +3616,7 @@ function tradeBuilderHtml() {
       `</div>`;
   }
 
+  html += `<div class="tb-meta" style="margin-top:8px">Swipe sideways to see each team’s full player values and draft picks.</div>`;
   html += `<div class="tb-cols">`;
   parts.forEach(t => {
     const roster = state.rosters.find(r => String(r.roster_id) === String(t));
@@ -3687,6 +3730,11 @@ function renderCoachTab(rosterId, mode) {
       if (mode === 'build') {
         tbEnsureInit();
         body.innerHTML = tradeBuilderHtml();
+        if (!state.draftOrder && !state.draftOrderLoading) {
+          loadDraftOrder().then(() => {
+            if (state.activeTab === 'coach' && state.coachMode === 'build') tbRender();
+          }).catch(() => {});
+        }
       } else if (mode === 'history') {
         body.innerHTML = '<div class="status"><div class="spinner"></div><p>Loading trades from your league history…</p></div>';
         await loadTradeHistory();
@@ -4542,12 +4590,12 @@ function draftOrderHtml() {
   order.sort((a,b) => a.pick - b.pick);
 
   let html = rules;
-  if (!bracketDone) html += `<div class="info-banner">Projected order — playoffs haven't finished, so this ranks everyone by points possible so far. Finish-based picks (5–8) lock in once the bracket completes.</div>`;
+  if (!bracketDone) html += `<div class="info-banner">Estimated, not finalized — Projected order — playoffs haven't finished, so this ranks everyone by points possible so far. Finish-based picks (5–8) lock in once the bracket completes.</div>`;
 
   html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Team</th><th>Basis</th></tr></thead><tbody>`;
   order.forEach(o => {
     html += `<tr>
-      <td class="pick-num">${o.pick}.01</td>
+      <td class="pick-num">1.${String(o.pick).padStart(2, '0')}</td>
       <td class="team-cell">${teamLink(o.id, true)}</td>
       <td class="tb-meta">${o.basis}</td>
     </tr>`;
