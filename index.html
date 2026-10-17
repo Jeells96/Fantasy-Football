@@ -4582,13 +4582,52 @@ async function loadDraftOrder() {
   return s.draftOrder;
 }
 
+function draftOrderYears() {
+  const first = Number(state.league && state.league.season) + 1;
+  const years = new Set((state.availableYears || []).map(Number).filter(y => Number.isFinite(y) && y >= first));
+  // Include future seasons even if no picks have been traded yet.
+  for (let y = first; y <= first + 4; y++) years.add(y);
+  return Array.from(years).sort((a, b) => a - b);
+}
+
+function selectDraftOrderYear(year) {
+  state.draftOrderYear = Number(year);
+  renderDraftOrder();
+}
+
+function futureDraftOwnershipHtml(year) {
+  const rounds = leagueDraftRounds();
+  const ids = state.rosters.map(r => String(r.roster_id));
+  let html = `<div class="info-banner">${year} draft positions are not known. Picks are grouped by round, not projected into a specific order. Ownership reflects trades recorded by Sleeper.</div>`;
+  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Round</th><th>Original team</th><th>Current holder</th></tr></thead><tbody>`;
+  for (let round = 1; round <= rounds; round++) {
+    html += `<tr class="round-header"><td colspan="3">Round ${round}</td></tr>`;
+    ids.forEach(id => {
+      const owner = getCurrentOwnerForPick(year, id, round);
+      const traded = String(owner) !== String(id);
+      html += `<tr><td class="pick-num">${round}${round === 1 ? 'st' : round === 2 ? 'nd' : round === 3 ? 'rd' : 'th'}</td><td class="team-cell">${teamLink(id, true)}</td><td class="team-cell">${teamLink(owner, true)}${traded ? ' <span class="tb-meta">(traded)</span>' : ''}</td></tr>`;
+    });
+  }
+  return html + `</tbody></table></div>`;
+}
+
 function renderDraftOrder() {
+  const firstYear = Number(state.league && state.league.season) + 1;
+  const years = draftOrderYears();
+  if (!years.includes(Number(state.draftOrderYear))) state.draftOrderYear = firstYear;
+  const year = Number(state.draftOrderYear);
   draftBody().innerHTML = `
-    <div class="section-label">${state.league && state.league.season ? Number(state.league.season) + 1 : ''} Rookie Draft Order</div>
-    <div id="draftOrderArea"><div class="status"><div class="spinner"></div><p>Crunching points possible…</p></div></div>
+    <div class="year-selector">
+      <span class="section-label" style="margin:0;">Rookie Draft Order</span>
+      <select class="year-select" aria-label="Draft order year" onchange="selectDraftOrderYear(this.value)">
+        ${years.map(y => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`).join('')}
+      </select>
+    </div>
+    <div id="draftOrderArea">${year > firstYear ? futureDraftOwnershipHtml(year) : '<div class="status"><div class="spinner"></div><p>Crunching points possible…</p></div>'}</div>
   `;
+  if (year > firstYear) return;
   loadDraftOrder().then(() => {
-    if (state.activeTab !== 'draft' || state.draftMode !== 'order') return;
+    if (state.activeTab !== 'draft' || state.draftMode !== 'order' || Number(state.draftOrderYear) !== year) return;
     const el = document.getElementById('draftOrderArea');
     if (el) el.innerHTML = draftOrderHtml();
   }).catch(e => {
