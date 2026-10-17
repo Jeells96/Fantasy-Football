@@ -872,7 +872,7 @@ body.modal-open { overflow:hidden; }
 .tb-cols { scrollbar-width:thin; }
 @media (max-width:560px) {
   .tb-cols { scroll-snap-type:x proximity; }
-  .tb-col { flex:0 0 calc(100% - 2px); scroll-snap-align:start; }
+  .tb-col { flex:0 0 min(76vw, 310px); scroll-snap-align:start; }
 }
 .tb-pcard-name { font-weight:600; font-size:.9rem; margin-top:3px; }
 .pos-badge { font-family:'DM Mono',monospace; font-size:.6rem; font-weight:600; border-radius:4px; padding:1px 5px; letter-spacing:.5px; }
@@ -2608,10 +2608,16 @@ function coachPicks(rosterId) {
     const ord = ROUND_ORD[p.round];
     const estimates = !p.exactSlot ? estimatedPickSlots(p.year) : null;
     const projectedSlot = estimates && estimates[String(p.originalRosterId)];
-    const overall = p.overall || (projectedSlot ? (p.round - 1) * nt + projectedSlot : null);
-    const slotLabel = projectedSlot ? p.round + '.' + String(projectedSlot).padStart(2, '0') : '';
-    const base = p.exactSlot ? (p.year + ' ' + p.exactSlot + ' · Sleeper draft order') :
-      slotLabel ? (p.year + ' ' + slotLabel + ' · estimated') : (p.year + ' ' + (ord || ('R' + p.round)) + ' · order TBD');
+    const tier = projectedSlot ? (projectedSlot <= Math.ceil(nt / 3) ? 'Early' : projectedSlot <= Math.ceil(2 * nt / 3) ? 'Mid' : 'Late') : 'Mid';
+    const overall = p.exactSlot ? p.overall : null;
+    const base = p.exactSlot ? (p.year + ' ' + p.exactSlot + ' · finalized draft order') :
+      (p.year + ' ' + tier + ' ' + (ord || ('R' + p.round)) + ' · estimated');
+    const tierSlots = { Early: [1, Math.ceil(nt / 3)], Mid: [Math.ceil(nt / 3) + 1, Math.ceil(2 * nt / 3)], Late: [Math.ceil(2 * nt / 3) + 1, nt] };
+    const [lo, hi] = tierSlots[tier];
+    // Use mean value of every possible pick in the tier, not its volatile projected exact spot.
+    const estimatedValue = Math.round(Array.from({length: hi - lo + 1}, (_, i) =>
+      pickValue(p.year, p.round, (p.round - 1) * nt + lo + i, nt)
+    ).reduce((a,b) => a+b, 0) / (hi - lo + 1));
     // Multiple identical future picks (e.g. two 2027 1sts) are distinguished by their
     // original team, and get a unique id so each can be added to a trade independently.
     return {
@@ -2621,7 +2627,7 @@ function coachPicks(rosterId) {
       year: p.year,
       round: p.round,
       overall: overall,
-      value: pickValue(p.year, p.round, overall, nt)
+      value: p.exactSlot ? pickValue(p.year, p.round, overall, nt) : estimatedValue
     };
   }).sort((a,b) => b.value - a.value);
 }
@@ -3405,7 +3411,7 @@ function tbHasPick(id) {
 // Clicking an asset: with two teams the destination is simply the other team; with three
 // or more we ask which team receives it (a player can't be added twice).
 function tbPickPlayer(pid, from) {
-  if (tbHasPlayer(pid)) return;
+  if (tbHasPlayer(pid)) { state.tb.assets = state.tb.assets.filter(a => !(a.kind === 'player' && a.pid === String(pid))); tbRender(); return; }
   from = String(from || ownerOfPlayer(pid) || '');
   // Search-to-start: pull the player's team into the trade if it isn't already in it.
   if (from && state.tb.teams.indexOf(from) === -1) state.tb.teams.push(from);
@@ -3414,7 +3420,7 @@ function tbPickPlayer(pid, from) {
   else { state.tb.pending = { kind:'player', pid:String(pid), from:from }; tbRender(); }
 }
 function tbPickPick(from, id, label, via, value) {
-  if (tbHasPick(id)) return;
+  if (tbHasPick(id)) { state.tb.assets = state.tb.assets.filter(a => !(a.kind === 'pick' && a.pickId === id)); tbRender(); return; }
   const parts = state.tb.teams;
   if (parts.length === 2) tbAddPick(from, id, label, via, value, parts.find(t => t !== from) || parts[0]);
   else { state.tb.pending = { kind:'pick', from:String(from), id:id, label:label, via:via, value:Number(value) }; tbRender(); }
@@ -3634,7 +3640,7 @@ function tradeBuilderHtml() {
     coachPicks(t).forEach(pk => {
       const added = tbHasPick(pk.id);
       const viaTxt = pk.via ? ` <span class="tb-meta">via ${escHtml(pk.via)}</span>` : '';
-      html += `<div class="tb-pcard ${added ? 'added' : ''}" ${added ? '' : `onclick="tbPickPick('${t}','${escJs(pk.id)}','${escJs(pk.label)}','${escJs(pk.via)}',${Math.round(pk.value)})"`}>
+      html += `<div class="tb-pcard ${added ? 'added' : ''}" onclick="tbPickPick('${t}','${escJs(pk.id)}','${escJs(pk.label)}','${escJs(pk.via)}',${Math.round(pk.value)})">
         <div class="tb-pcard-top"><span class="pos-badge pos-pick">PICK</span><span class="tb-val" style="margin-left:auto">${fmt(pk.value)}</span></div>
         <div class="tb-pcard-name">${pk.label}${viaTxt}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
       </div>`;
@@ -3652,7 +3658,7 @@ function tbCardHtml(pid, from, M, added, isSearch) {
   const team = p.team || 'FA';
   const owner = isSearch ? ownerOfPlayer(pid) : from;
   const sub = isSearch ? (owner ? teamName(owner) : 'Free agent') : (p.age ? 'Age ' + p.age : '');
-  const click = added ? '' : `onclick="tbPickPlayer('${pid}','${owner}')"`;
+  const click = `onclick="tbPickPlayer('${pid}','${owner}')"`;
   return `<div class="tb-pcard ${added ? 'added' : ''}" ${click}>
     <div class="tb-pcard-top"><span class="pos-badge pos-${pos.toLowerCase()}">${pos}</span><span class="tb-meta"> ${team}</span><span class="tb-val" style="margin-left:auto">${Math.round(M.dynValue(pid)).toLocaleString()}</span></div>
     <div class="tb-pcard-name">${playerDisplayName(pid)}${playerInjuryTag(pid)}${added ? ' <span class="tb-meta">✓ added</span>' : ''}</div>
@@ -4592,14 +4598,24 @@ function draftOrderHtml() {
   let html = rules;
   if (!bracketDone) html += `<div class="info-banner">Estimated, not finalized — Projected order — playoffs haven't finished, so this ranks everyone by points possible so far. Finish-based picks (5–8) lock in once the bracket completes.</div>`;
 
-  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Team</th><th>Basis</th></tr></thead><tbody>`;
-  order.forEach(o => {
-    html += `<tr>
-      <td class="pick-num">1.${String(o.pick).padStart(2, '0')}</td>
-      <td class="team-cell">${teamLink(o.id, true)}</td>
-      <td class="tb-meta">${o.basis}</td>
-    </tr>`;
-  });
+  const rounds = leagueDraftRounds();
+  const draftYear = Number(state.league.season) + 1;
+  html += `<div class="coach-sub">${bracketDone ? 'Finalized draft order' : 'ESTIMATED draft order — slots can change until the season ends'}. Current pick holders include completed trades.</div>`;
+  html += `<div class="draft-board"><table class="board-table"><thead><tr><th>Pick</th><th>Original team</th><th>Current holder</th><th>Status / basis</th></tr></thead><tbody>`;
+  for (let round = 1; round <= rounds; round++) {
+    order.forEach(o => {
+      // League draft order is the same within each round for linear rookie drafts.
+      const owner = getCurrentOwnerForPick(draftYear, o.id, round);
+      const traded = String(owner) !== String(o.id);
+      const tier = o.pick <= Math.ceil(ids.length / 3) ? 'Early' : o.pick <= Math.ceil(ids.length * 2 / 3) ? 'Mid' : 'Late';
+      html += `<tr>
+        <td class="pick-num">${round}.${String(o.pick).padStart(2, '0')}</td>
+        <td class="team-cell">${teamLink(o.id, true)}</td>
+        <td class="team-cell">${teamLink(owner, true)}${traded ? ' <span class="tb-meta">(traded)</span>' : ''}</td>
+        <td class="tb-meta">${bracketDone ? 'Finalized' : 'Estimated · ' + tier}<div>${o.basis}</div></td>
+      </tr>`;
+    });
+  }
   html += `</tbody></table></div>`;
 
   // Lineup efficiency — who left the most points on the bench
