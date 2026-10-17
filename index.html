@@ -992,6 +992,15 @@ body.modal-open { overflow:hidden; }
   color:var(--danger);
   border-color:var(--danger);
 }
+/* Destination selection floats over the roster instead of appearing above it. */
+.tb-dest-backdrop { position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; padding:18px; }
+.tb-dest-dialog { width:min(100%,420px); max-height:calc(100dvh - 36px); overflow-y:auto; border:1px solid var(--accent); border-radius:16px; background:#141a29; color:#f2f3f8; padding:22px; box-shadow:0 22px 70px #0009; }
+.tb-dest-dialog h3 { margin:0 0 8px; color:var(--accent); font-size:1.1rem; }
+.tb-dest-dialog p { margin:0 0 16px; line-height:1.5; overflow-wrap:anywhere; }
+.tb-dest-options { display:grid; gap:9px; }
+.tb-dest-options button { display:block; width:100%; padding:13px; text-align:left; background:#232d41; color:#fff; border:1px solid #41516c; border-radius:9px; font:inherit; cursor:pointer; }
+.tb-dest-options button:active { background:#364b69; }
+.tb-dest-cancel { margin-top:15px; background:none; color:#aab5cb; border:0; padding:10px; font:inherit; cursor:pointer; }
 </style>
 </head>
 
@@ -3423,24 +3432,49 @@ function tbPickPlayer(pid, from) {
   if (from && state.tb.teams.indexOf(from) === -1) state.tb.teams.push(from);
   const parts = state.tb.teams;
   if (parts.length === 2) tbAddPlayer(pid, from, parts.find(t => t !== from) || parts[0]);
-  else { state.tb.pending = { kind:'player', pid:String(pid), from:from }; tbRender(); }
+  else { state.tb.pending = { kind:'player', pid:String(pid), from:from }; tbShowDestinationModal(); }
 }
 function tbPickPick(from, id, label, via, value) {
   if (tbHasPick(id)) { state.tb.assets = state.tb.assets.filter(a => !(a.kind === 'pick' && a.pickId === id)); tbRender(); return; }
   const parts = state.tb.teams;
   if (parts.length === 2) tbAddPick(from, id, label, via, value, parts.find(t => t !== from) || parts[0]);
-  else { state.tb.pending = { kind:'pick', from:String(from), id:id, label:label, via:via, value:Number(value) }; tbRender(); }
+  else { state.tb.pending = { kind:'pick', from:String(from), id:id, label:label, via:via, value:Number(value) }; tbShowDestinationModal(); }
 }
+function tbShowDestinationModal() {
+  const pd = state.tb.pending;
+  if (!pd) return;
+  document.getElementById('tbDestModal')?.remove();
+  const dests = state.tb.teams.filter(t => t !== pd.from);
+  const others = state.rosters.map(r => String(r.roster_id)).filter(t => t !== pd.from);
+  const opts = dests.length ? dests : others;
+  const label = pd.kind === 'player' ? playerDisplayName(pd.pid) : pd.label;
+  const overlay = document.createElement('div');
+  overlay.id = 'tbDestModal';
+  overlay.className = 'tb-dest-backdrop';
+  overlay.setAttribute('role','presentation');
+  overlay.innerHTML = `<div class="tb-dest-dialog" role="dialog" aria-modal="true" aria-labelledby="tbDestTitle">
+    <h3 id="tbDestTitle">Who receives this?</h3><p>${escHtml(label)}</p>
+    <div class="tb-dest-options">${opts.map(t => `<button type="button" data-dest="${escHtml(t)}">${escHtml(teamName(t))}</button>`).join('')}</div>
+    <button type="button" class="tb-dest-cancel">Cancel</button>
+  </div>`;
+  overlay.querySelectorAll('[data-dest]').forEach(btn => btn.addEventListener('click', () => tbChooseDest(btn.dataset.dest)));
+  overlay.querySelector('.tb-dest-cancel').addEventListener('click', tbCancelPending);
+  overlay.addEventListener('click', e => { if (e.target === overlay) tbCancelPending(); });
+  document.body.appendChild(overlay);
+  overlay.querySelector('[data-dest], .tb-dest-cancel')?.focus({preventScroll:true});
+}
+function tbCloseDestinationModal() { document.getElementById('tbDestModal')?.remove(); }
 function tbChooseDest(to) {
   const pd = state.tb.pending;
   if (!pd) return;
   to = String(to);
   if (to && state.tb.teams.indexOf(to) === -1) state.tb.teams.push(to);  // bring in the receiving team if new
   state.tb.pending = null;
+  tbCloseDestinationModal();
   if (pd.kind === 'player') tbAddPlayer(pd.pid, pd.from, to);
   else tbAddPick(pd.from, pd.id, pd.label, pd.via, pd.value, to);
 }
-function tbCancelPending() { state.tb.pending = null; tbRender(); }
+function tbCancelPending() { state.tb.pending = null; tbCloseDestinationModal(); }
 
 function tbAddPlayer(pid, from, to) {
   if (!to || tbHasPlayer(pid)) { tbRender(); return; }
@@ -3544,17 +3578,6 @@ function tradeBuilderHtml() {
     html += `<div class="tb-verdict close">${parts.length
       ? 'Search a player below to trade for — their team joins the deal automatically — or add a second team above.'
       : 'Add a team above, or search a player to start (their team joins the deal).'}</div>`;
-  }
-
-  // Pending destination chooser. Normally the other participating teams; if the giver is the
-  // only team in the trade (e.g. adding your own player first), offer everyone else instead.
-  if (tb.pending) {
-    const label = tb.pending.kind === 'player' ? playerDisplayName(tb.pending.pid) : tb.pending.label;
-    const dests = parts.filter(t => t !== tb.pending.from);
-    const opts = dests.length ? dests : notIn;
-    html += `<div class="tb-verdict close"><b>Send ${escHtml(label)} to:</b> ` +
-      opts.map(t => `<button class="tb-add-btn" onclick="tbChooseDest('${t}')">${teamName(t)}</button>`).join(' ') +
-      ` <button class="tb-remove" onclick="tbCancelPending()" title="Cancel">&times;</button></div>`;
   }
 
   // RESULT / evaluator
