@@ -3482,27 +3482,56 @@ function tbAddPlayer(pid, from, to) {
   state.tb.search = '';   // clear the search box after adding a searched player
   tbRender();
 }
+// A user's guess about an unfinalized pick is local to this trade only.
+// Exact picks use their individual draft slot; tiers use the average of their slots.
 function tbSetPickTier(id, tier) {
-  if (!['Early','Mid','Late'].includes(tier)) return;
+  if (!['Early','Mid','Late','Exact'].includes(tier)) return;
   const a = state.tb.assets.find(x => x.kind === 'pick' && x.pickId === id);
   if (!a || !a.estimated) return;
   const [year, round] = id.split('|').map(Number);
   const nt = state.rosters.length || 12;
-  const first = Math.ceil(nt / 3), second = Math.ceil(2 * nt / 3);
-  const bounds = {Early:[1,first], Mid:[first+1,second], Late:[second+1,nt]}[tier];
-  const vals = [];
-  for (let slot=bounds[0]; slot<=bounds[1]; slot++) vals.push(pickValue(year,round,(round-1)*nt+slot,nt));
-  a.value = Math.round(vals.reduce((n,v)=>n+v,0)/vals.length);
+  if (tier === 'Exact') {
+    const first = Math.ceil(nt / 3), second = Math.ceil(2 * nt / 3);
+    const bounds = {Early:[1,first], Mid:[first+1,second], Late:[second+1,nt]};
+    const original = bounds[a.tier] || bounds.Mid;
+    a.exactSlot = a.exactSlot || Math.min(nt, Math.max(1, Math.round((original[0]+original[1])/2)));
+    a.value = pickValue(year,round,(round-1)*nt+a.exactSlot,nt);
+  } else {
+    const first = Math.ceil(nt / 3), second = Math.ceil(2 * nt / 3);
+    const bounds = {Early:[1,first], Mid:[first+1,second], Late:[second+1,nt]}[tier];
+    const vals = [];
+    for (let slot=bounds[0]; slot<=bounds[1]; slot++) vals.push(pickValue(year,round,(round-1)*nt+slot,nt));
+    a.value = Math.round(vals.reduce((n,v)=>n+v,0)/vals.length);
+    a.exactSlot = null;
+  }
   a.tier = tier;
+  tbRender();
+}
+function tbSetPickExactSlot(id, slot) {
+  const a = state.tb.assets.find(x => x.kind === 'pick' && x.pickId === id);
+  if (!a || !a.estimated || a.tier !== 'Exact') return;
+  const [year, round] = id.split('|').map(Number);
+  const nt = state.rosters.length || 12;
+  slot = Number(slot);
+  if (!Number.isInteger(slot) || slot < 1 || slot > nt) return;
+  a.exactSlot = slot;
+  a.value = pickValue(year,round,(round-1)*nt+slot,nt);
   tbRender();
 }
 function tbPickTierControl(a) {
   if (!a.estimated) return '';
-  return `<label class="tb-meta" style="display:block;margin-top:5px">Your projected range
-    <select class="tb-tier-select" aria-label="Projected range for ${escHtml(a.label)}" onclick="event.stopPropagation()" onchange="tbSetPickTier('${escJs(a.pickId)}',this.value)">
+  const nt = state.rosters.length || 12;
+  const round = Number(a.pickId.split('|')[1]);
+  return `<label class="tb-meta" style="display:block;margin-top:5px">Your projected pick
+    <select class="tb-tier-select" aria-label="Projected range or exact pick for ${escHtml(a.label)}" onclick="event.stopPropagation()" onchange="tbSetPickTier('${escJs(a.pickId)}',this.value)">
       ${['Early','Mid','Late'].map(t => `<option value="${t}" ${a.tier === t ? 'selected' : ''}>${t} — average value</option>`).join('')}
+      <option value="Exact" ${a.tier === 'Exact' ? 'selected' : ''}>Exact Pick — choose slot</option>
     </select>
-  </label>`;
+  </label>${a.tier === 'Exact' ? `<label class="tb-meta" style="display:block;margin-top:5px">Estimated specific pick (not finalized)
+    <select class="tb-tier-select" aria-label="Specific estimated draft pick" onclick="event.stopPropagation()" onchange="tbSetPickExactSlot('${escJs(a.pickId)}',this.value)">
+      ${Array.from({length:nt},(_,i)=>i+1).map(slot => `<option value="${slot}" ${a.exactSlot === slot ? 'selected' : ''}>${round}.${String(slot).padStart(2,'0')}</option>`).join('')}
+    </select>
+  </label>` : ''}`;
 }
 function tbAddPick(from, id, label, via, value, to) {
   if (!to || tbHasPick(id)) { tbRender(); return; }
@@ -3721,7 +3750,7 @@ function tbCardHtml(pid, from, M, added, isSearch) {
 
 function tbAssetName(a) {
   if (a.kind === 'pick') {
-    const displayLabel = a.estimated && a.tier ? a.label.replace(/\b(Early|Mid|Late)\b/,a.tier) : a.label;
+    const displayLabel = a.estimated && a.tier === 'Exact' && a.exactSlot ? (a.pickId.split('|')[0] + ' ' + a.pickId.split('|')[1] + '.' + String(a.exactSlot).padStart(2,'0') + ' · YOUR ESTIMATE (not finalized)') : (a.estimated && a.tier ? a.label.replace(/\b(Early|Mid|Late)\b/,a.tier) : a.label);
     return `<b>${escHtml(displayLabel)}</b> <span class="tb-meta">pick${a.via ? ' · ' + escHtml(a.via) + '’s' : ''}${a.from ? ' · from ' + teamName(a.from) : ''}</span>`;
   }
   const p = state.players[String(a.pid)] || {};
