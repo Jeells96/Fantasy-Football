@@ -1157,6 +1157,7 @@ function freshState() {
     frozenGradesLoaded:false,
     draftOrder:null,
     draftOrderLoading:false,
+    draftOrderLive:false,
     newsTeam:null,
     newsByTeam:{},
     tb:null,
@@ -2572,31 +2573,83 @@ function parseDcPicks(chunk, tc, valKey) {
   return out;
 }
 
-/* ---------- Value Adjustment (KeepTradeCut-style consolidation/stud premium) ----------
-   Raw addition says "a pile of picks = one stud" — but one elite player takes a single
-   roster spot and is far harder to acquire. So we credit the side that CONSOLIDATES: gives
-   up more pieces than it takes back. A 1-for-1 (or any even piece count) gets no premium.
-   Calibrated to KTC: their Amon-Ra example is +2,783 at gap 2 and +4,289 at gap 3, i.e.
-   ≈ 0.175 × value × gap. It updates live as pieces are added to either side. */
-const VA_EXPLAIN = "Value Adjustment\n\nTrading is more than simple addition. We add value to the side that gives up more pieces than it gets back — because consolidating into one stud uses a single roster spot and is far harder to acquire than a pile of picks. A 1-for-1 swap gets no adjustment. This counters calculators that call 12 late picks a fair deal for a superstar, and updates as players are added to either side.";
-const VA_STUD_FLOOR = 3000;   // below this, a player is a role piece (no premium)
-const VA_STUD_CEIL = 8000;    // at/above this, fully "elite" on our blended scale
-const VA_RATE = 0.175;        // premium per net piece consolidated (matches KTC's examples)
-const VA_GAP_CAP = 6;
-
-function vaStudWeight(v) {
-  return Math.max(0, Math.min(1, (v - VA_STUD_FLOOR) / (VA_STUD_CEIL - VA_STUD_FLOOR)));
+/* ---------- Market-quality package adjustment ----------
+   The blended prices already incorporate scarcity. Discount only the additional assets
+   by quality, never the highest-value piece. No mandatory centerpiece or piece-count tax. */
+const VA_EXPLAIN = "Market package adjustment\n\nThe largest incoming asset keeps full market value. Other assets have a smooth 0–20% discount based on their individual market quality. Strong additional assets keep nearly all their value; low-value throw-ins count less. No extra superstar multiplier or automatic 3-for-1 penalty.";
+function packageMarketValues(values) {
+  const v = (values || []).map(Number).filter(x => Number.isFinite(x) && x > 0).sort((a,b) => b-a);
+  const raw = v.reduce((a,b) => a+b,0);
+  if (v.length < 2) return {raw, adjusted:raw, discount:0, entries:v.map((value)=>({value,rate:0}))};
+  // Smooth logarithmic quality curve, anchored to FantasyCalc's blended value scale.
+  // 9000+ ~= no discount, around 4500 ~= 6%, around 2000 ~= 13%, fringe ~= 20%.
+  const rate = value => Math.min(.20, Math.max(0, .20 * (1 - Math.log1p(value)/Math.log1p(10000)) * 3.0));
+  const entries = v.map((value,i) => ({value,rate:i===0?0:rate(value)}));
+  const adjusted = entries.reduce((sum,e) => sum + e.value*(1-e.rate),0);
+  return {raw,adjusted,discount:raw-adjusted,entries};
 }
-// Premium credited to a side that consolidates: gap = (pieces it GAVE) − (pieces it GOT).
-// Zero for a 1-for-1 or a side taking back more pieces than it sends. Scales with the top
-// asset received (its "stud factor") so consolidating into an elite is worth the most.
 function valueAdjustment(receivedValues, piecesGiven) {
-  if (!receivedValues.length) return 0;
-  const top = Math.max.apply(null, receivedValues);
-  const gap = Math.max(0, (piecesGiven || 0) - receivedValues.length);
-  return Math.round(top * vaStudWeight(top) * VA_RATE * Math.min(gap, VA_GAP_CAP));
+  return -Math.round(packageMarketValues(receivedValues).discount);
 }
-
+function sourceTradeComparison(assets, teams) {
+  const result = [];
+  const srcs = ['FantasyCalc','DynastyProcess','theffdynasty','DynastyCalc'];
+  srcs.forEach(src => {
+    const totals = {};
+    let missing = 0, count = 0;
+    teams.forEach(team => totals[team]=0);
+    assets.forEach(a => {
+      let v;
+      if (a.kind === 'pick') { v = Number(a.value)||0; }
+      else {
+        const row = state.vals && state.vals.byId && state.vals.byId[String(a.pid)];
+        const part = row && (row.parts || row.sources || []).find(p => p.src === src);
+        v = part && Number(part.value);
+        if (!Number.isFinite(v)) { missing++; return; }
+      }
+      totals[a.to] += v; count++;
+    });
+    result.push({source:src, totals, missing, count});
+  });
+  return result;
+}
+function teamTradeFit(teamId, assets, M, direction) {
+  const roster = state.rosters.find(r => String(r.roster_id)===String(teamId));
+  const have = ((roster && roster.players)||[]).map(String);
+  const incoming=assets.filter(a=>a.to===teamId), outgoing=assets.filter(a=>a.from===teamId);
+  const lose=new Set(outgoing.filter(a=>a.kind!=='pick').map(a=>String(a.pid)));
+  const post=have.filter(id=>!lose.has(id)).concat(incoming.filter(a=>a.kind!=='pick').map(a=>String(a.pid)));
+  const positions=['QB','RB','WR','TE'];
+  const score=ids=>positions.reduce((sum,pos)=> {
+    const values=ids.filter(id=>playerPositionOf(id)===pos).map(id=>M.baseValue(id)).sort((a,b)=>b-a);
+    const n=(starterCounts()[pos]||0) + (pos==='QB'&&isSuperflex()?1:0);
+    return sum+values.slice(0,Math.max(1,n)).reduce((a,b)=>a+b,0);
+  },0);
+  const starterDelta=score(post)-score(have);
+  const pickDelta=incoming.filter(a=>a.kind==='pick').reduce((v,a)=>v+(a.value||0),0)-outgoing.filter(a=>a.kind==='pick').reduce((v,a)=>v+(a.value||0),0);
+  const dynDelta=incoming.reduce((v,a)=>v+(a.kind==='pick'?(a.value||0):M.dynValue(a.pid)),0)-outgoing.reduce((v,a)=>v+(a.kind==='pick'?(a.value||0):M.dynValue(a.pid)),0);
+  const ageDelta=incoming.filter(a=>a.kind!=='pick').reduce((sum,a)=>sum+(Number(state.players[a.pid]&&state.players[a.pid].age)||26),0)/Math.max(1,incoming.filter(a=>a.kind!=='pick').length)
+    -outgoing.filter(a=>a.kind!=='pick').reduce((sum,a)=>sum+(Number(state.players[a.pid]&&state.players[a.pid].age)||26),0)/Math.max(1,outgoing.filter(a=>a.kind!=='pick').length);
+  // This is a local, disclosed fit estimate, not a third-party market grade.
+  const teamDyn = have.reduce((v,id)=>v+M.dynValue(id),0);
+  const peerTotals = state.rosters.map(r=>((r.players)||[]).reduce((v,id)=>v+M.dynValue(String(id)),0)).sort((a,b)=>a-b);
+  const median = peerTotals.length ? peerTotals[Math.floor(peerTotals.length/2)] : teamDyn;
+  const strategy=direction==='auto'?(teamDyn>median*1.16?'contend':teamDyn<median*.82?'rebuild':'balanced'):direction;
+  const fit= strategy==='contend' ? starterDelta*.50+dynDelta*.35+pickDelta*.15 : strategy==='rebuild' ? dynDelta*.65+pickDelta*.3-ageDelta*85 : dynDelta*.65+starterDelta*.25+pickDelta*.1;
+  const base=Math.max(2000,outgoing.reduce((v,a)=>v+(a.kind==='pick'?(a.value||0):M.dynValue(a.pid)),0));
+  const pct=fit/base;
+  const grade=pct>=.25?'A+':pct>=.12?'A':pct>=.03?'B+':pct>=-.03?'B':pct>=-.12?'C':pct>=-.25?'D':'F';
+  return {grade, starterDelta,pickDelta,dynDelta,strategy};
+}
+function tbChangeStrategy(id,val) { state.tbStrategies=state.tbStrategies||{}; state.tbStrategies[id]=val; tbRender(); }
+function tbToggleComparisons() { state.tbShowComparisons=!state.tbShowComparisons; tbRender(); }
+// Legacy adjustment is ONLY for historical trade grades; do not change frozen league history.
+function historicalValueAdjustment(receivedValues,piecesGiven) {
+  if (!receivedValues.length) return 0;
+  const top=Math.max(...receivedValues);
+  const weight=Math.max(0,Math.min(1,(top-3000)/5000));
+  return Math.round(top*weight*.175*Math.min(Math.max(0,(piecesGiven||0)-receivedValues.length),6));
+}
 function estimatedPickSlots(year) {
   const nextSeason = Number(state.league && state.league.season) + 1;
   const d = state.draftOrder;
@@ -3042,12 +3095,10 @@ function tradeViable(team, lose, gain, picksOut, picksIn, M) {
 function suggestionGrade(getN, giveN, gp, gk, sp, sk, M) {
   const recvMe = gp.map(p => M.dynValue(p)).concat(gk.map(k => k.value));
   const recvOther = sp.map(p => M.dynValue(p)).concat(sk.map(k => k.value));
-  const creditMe = valueAdjustment(recvMe, sp.length + sk.length);       // I gave (sp+sk) pieces
-  const creditOther = valueAdjustment(recvOther, gp.length + gk.length); // they gave (gp+gk) pieces
-  const adjMe = creditMe - creditOther;                                  // zero-sum transfer (2-team)
-  // Effective "gets" totals, exactly like the Trade Builder's 2-team evaluator.
+  const adjMe = valueAdjustment(recvMe, sp.length + sk.length);
+  const adjOther = valueAdjustment(recvOther, gp.length + gk.length);
   const effMe = getN + adjMe;
-  const effOther = giveN - adjMe;
+  const effOther = giveN + adjOther;
   const wonBy = wonByPct(Math.max(effMe, effOther), Math.min(effMe, effOther));
   const netPctMe = (effMe - effOther) / Math.max(effMe, effOther, 1);
   const netPctOther = (effOther - effMe) / Math.max(effMe, effOther, 1);
@@ -3611,23 +3662,13 @@ function tradeBuilderHtml() {
 
   // RESULT / evaluator
   if (tb.assets.length) {
-    // Value Adjustment (zero-sum transfer): the side that consolidates (gives more pieces than
-    // it gets) earns a premium; whoever GAVE it those consolidated pieces is charged the same.
-    const givenPieces = {}, recvPieces = {}, credit = {}, charge = {};
+    // Each incoming package is discounted independently. No zero-sum stud bonus.
+    const adj = {}, recvEff = {}, packages = {};
     parts.forEach(t => {
-      givenPieces[t] = tb.assets.filter(a => a.from === t).length;
-      recvPieces[t] = tb.assets.filter(a => a.to === t).length;
-      charge[t] = 0;
+      packages[t] = packageMarketValues(tb.assets.filter(a=>a.to===t).map(assetVal));
+      adj[t] = -Math.round(packages[t].discount);
+      recvEff[t] = recv[t] + adj[t];
     });
-    parts.forEach(t => { credit[t] = valueAdjustment(tb.assets.filter(a => a.to === t).map(assetVal), givenPieces[t]); });
-    parts.forEach(j => {
-      if (!credit[j] || !recvPieces[j]) return;
-      const froms = {};
-      tb.assets.filter(a => a.to === j).forEach(a => { froms[a.from] = (froms[a.from] || 0) + 1; });
-      Object.keys(froms).forEach(i => { if (charge[i] != null) charge[i] += credit[j] * froms[i] / recvPieces[j]; });
-    });
-    const adj = {}, recvEff = {};
-    parts.forEach(t => { adj[t] = Math.round(credit[t] - charge[t]); recvEff[t] = recv[t] + adj[t]; });
 
     const sides = parts.map(t => {
       // 2-team: compare the two effective "gets" totals directly (symmetric). Multi-team:
@@ -3671,9 +3712,10 @@ function tradeBuilderHtml() {
         </div>
         <div class="tb-side-cols">
           <div class="tb-getcol">
+            <div class="tb-meta">Raw market value: ${fmt(recv[s.t])} · Discount: ${fmt(packages[s.t].discount)} · Adjusted: ${fmt(recvEff[s.t])}</div>
             <div class="tb-colhead"><span class="tx-add">Gets</span><span class="tb-val">${fmt(recvEff[s.t])}</span></div>
             ${gets.length ? gets.map(x => `<div class="tb-row"><span>${tbAssetName(x.a)}${tbPickTierControl(x.a)}</span><span><span class="tb-val">${fmt(assetVal(x.a))}</span> <button class="tb-remove" onclick="tbRemoveAsset(${x.i})" title="Remove">&times;</button></span></div>`).join('') : '<div class="tb-meta">—</div>'}
-            ${adj[s.t] ? `<div class="tb-row tb-adj${adj[s.t] < 0 ? ' neg' : ''}" title="Value Adjustment: consolidating into fewer, more elite pieces earns a premium; shedding a stud for a pile is charged that premium"><span>Value Adjustment <span class="va-info" onclick="event.stopPropagation();alert(VA_EXPLAIN)">?</span></span><span class="tb-val">${adj[s.t] > 0 ? '+' : '−'}${fmt(Math.abs(adj[s.t]))}</span></div>` : ''}
+            ${adj[s.t] ? `<div class="tb-row tb-adj${adj[s.t] < 0 ? ' neg' : ''}" title="Quality-based package discount (up to 20% on additional lower-valued assets)"><span>Package adjustment <span class="va-info" onclick="event.stopPropagation();alert(VA_EXPLAIN)">?</span></span><span class="tb-val">${adj[s.t] > 0 ? '+' : '−'}${fmt(Math.abs(adj[s.t]))}</span></div>` : ''}
           </div>
           <div class="tb-getcol">
             <div class="tb-colhead"><span class="tx-drop">Sends</span><span class="tb-val">${fmt(give[s.t])}</span></div>
@@ -3685,6 +3727,24 @@ function tradeBuilderHtml() {
 
     if (wonBy > 0.05 && evenGap > 0) {
       html += `<div class="tb-even-hint">Add value worth <b>${fmt(evenGap)}</b> to ${teamName(worstSide.t)} to even it out.</div>`;
+    }
+    // A distinct roster-fit perspective never changes market fairness.
+    html += `<div class="detail-title" style="margin-top:16px">Team-specific grades <span class="tb-meta">(estimated roster fit)</span></div>`;
+    parts.forEach(t => {
+      const direction=(state.tbStrategies&&state.tbStrategies[t])||'auto';
+      const fit=teamTradeFit(t,tb.assets,M,direction);
+      html += `<div class="tb-side"><div class="tb-side-head">${teamName(t)} <span class="tb-grade ${tbGradeClass(fit.grade)}">${fit.grade}</span></div>
+      <div class="tb-meta">Team strategy: <select aria-label="Team strategy for ${escHtml(teamName(t))}" onchange="tbChangeStrategy('${t}',this.value)">
+      ${[['auto','Auto (roster strength)'],['contend','Win now'],['balanced','Balanced'],['rebuild','Rebuilding']].map(([value,label])=>`<option value="${value}" ${value===direction?'selected':''}>${label}</option>`).join('')}</select></div>
+      <div class="tb-meta">Estimated strategy: ${fit.strategy} · Starting lineup impact: ${fmt(fit.starterDelta)} · Draft capital change: ${fmt(fit.pickDelta)} · Dynasty value change: ${fmt(fit.dynDelta)}</div></div>`;
+    });
+    html += `<div class="detail-title" style="margin-top:16px">Outside market comparison</div><button class="cancel-btn" onclick="tbToggleComparisons()">${state.tbShowComparisons?'Hide':'Compare'} source values</button>`;
+    if (state.tbShowComparisons) {
+      html += `<div class="info-banner">These are value-only comparisons using the source contributions already loaded in this app, NOT grades from the third-party sites' trade calculators. Pick values use this app's selected estimate. Missing data is disclosed.</div>`;
+      sourceTradeComparison(tb.assets,parts).forEach(row=>{
+        html+=`<div class="tb-side"><b>${row.source}</b><div class="tb-meta">${parts.map(t=>`${escHtml(teamName(t))}: ${fmt(row.totals[t])}`).join(' · ')}${row.missing?' · '+row.missing+' unavailable player value(s) — incomplete':''}</div></div>`;
+      });
+      html+=`<div class="tb-meta">Official sites: <a href="https://keeptradecut.com/trade-calculator" target="_blank" rel="noopener">KeepTradeCut</a> · <a href="https://www.fantasycalc.com/trade-calculator" target="_blank" rel="noopener">FantasyCalc</a> · <a href="https://dynastyprocess.com/" target="_blank" rel="noopener">DynastyProcess</a>. Enter the trade there for an official site-specific result.</div>`;
     }
     html += `<div style="margin-top:12px;"><button class="cancel-btn" onclick="tbClear()">Clear trade</button></div>`;
     html += `</div>`;
@@ -4075,7 +4135,7 @@ function computeTradeSides(tr, becameMode, M, th) {
     const sent = histSent(tr, rid, th, becameMode, M);
     const sentPieces = Object.keys(tr.drops).filter(pid => String(tr.drops[pid]) === rid).length +
       (tr.draft_picks || []).filter(p => String(p.previous_owner_id) === rid).length;
-    const credit = valueAdjustment(got.items.map(it => it.value), sentPieces);
+    const credit = historicalValueAdjustment(got.items.map(it => it.value), sentPieces);
     return { rid: rid, name: histName(th, tr.leagueId, rid), items: got.items, total: got.total, sent: sent, credit: credit };
   });
   const creditOf = {}; base.forEach(b => creditOf[b.rid] = b.credit);
@@ -4584,10 +4644,14 @@ async function loadDraftOrder() {
   const byWeek = {};
   allWeeks.forEach((w, i) => byWeek[w] = results[i] || []);
 
+  // Determine the active scoring week from the NFL state; otherwise Sleeper league season
+  // week (if supplied). Never infer completed weeks from a team's nonzero partial score.
+  const liveWeek = currentNflWeek();
   const stats = {};
   s.rosters.forEach(r => stats[String(r.roster_id)] = { actual: 0, possible: 0, weeks: 0 });
 
   regWeeks.forEach(w => {
+    if (!s.draftOrderLive && w >= liveWeek) return;
     (byWeek[w] || []).forEach(m => {
       if (!m || (m.points || 0) <= 0) return; // week not played for this team
       const st = stats[String(m.roster_id)];
@@ -4606,7 +4670,7 @@ async function loadDraftOrder() {
     s.brackets = { winners: w || [], losers: l || [] };
   }
 
-  s.draftOrder = { stats: stats, byWeek: byWeek, regWeeks: regWeeks, pstart: pstart, winners: s.brackets.winners };
+  s.draftOrder = { stats: stats, byWeek: byWeek, regWeeks: regWeeks, pstart: pstart, winners: s.brackets.winners, throughWeek:s.draftOrderLive?liveWeek:liveWeek-1, live:s.draftOrderLive };
   s.draftOrderLoading = false;
   return s.draftOrder;
 }
@@ -4640,6 +4704,11 @@ function futureDraftOwnershipHtml(year) {
   return html + `</tbody></table></div>`;
 }
 
+function setDraftOrderLive(val) {
+  state.draftOrderLive = val === 'live';
+  state.draftOrder = null;
+  renderDraftOrder();
+}
 function renderDraftOrder() {
   const firstYear = Number(state.league && state.league.season) + 1;
   const years = draftOrderYears();
@@ -4652,6 +4721,7 @@ function renderDraftOrder() {
         ${years.map(y => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`).join('')}
       </select>
     </div>
+    ${year === firstYear ? `<div class="year-selector" style="margin:10px 0"><span class="tb-meta">Max PF through</span><select aria-label="Points possible reporting mode" onchange="setDraftOrderLive(this.value)"><option value="completed" ${!state.draftOrderLive?'selected':''}>Completed weeks (default)</option><option value="live" ${state.draftOrderLive?'selected':''}>Live including active week</option></select></div>` : ''}
     <div id="draftOrderArea">${year > firstYear ? futureDraftOwnershipHtml(year) : '<div class="status"><div class="spinner"></div><p>Crunching points possible…</p></div>'}</div>
   `;
   if (year > firstYear) return;
@@ -4677,7 +4747,7 @@ function draftOrderHtml() {
   </div>`;
 
   if (!played) {
-    return rules + `<div class="info-banner">No games played yet for ${state.league.season}. Order and lineup efficiency fill in each week as scores post — it tracks your league's real points-possible tiebreakers.</div>`;
+    return rules + `<div class="info-banner">No completed scoring weeks yet for ${state.league.season} in this view. Switch to Live to see partial scores.</div>`;
   }
 
   // playoff teams / finish from the winners bracket
@@ -4717,7 +4787,7 @@ function draftOrderHtml() {
 
   order.sort((a,b) => a.pick - b.pick);
 
-  let html = rules;
+  let html = `<div class="info-banner">${d.live ? 'LIVE — includes the active, partially scored week' : 'Completed weeks only — through week '+Math.max(0,d.throughWeek)}. Draft positions remain estimated until finalized.</div>` + rules;
   if (!bracketDone) html += `<div class="info-banner">Estimated, not finalized — Projected order — playoffs haven't finished, so this ranks everyone by points possible so far. Finish-based picks (5–8) lock in once the bracket completes.</div>`;
 
   const rounds = leagueDraftRounds();
