@@ -2642,6 +2642,7 @@ function teamTradeFit(teamId, assets, M, direction) {
   return {grade, starterDelta,pickDelta,dynDelta,strategy};
 }
 function tbChangeStrategy(id,val) { state.tbStrategies=state.tbStrategies||{}; state.tbStrategies[id]=val; tbRender(); }
+function tbToggleTeamGrades() { state.tbTeamGradesExpanded = !state.tbTeamGradesExpanded; tbRender(); }
 function tbToggleComparisons() { state.tbShowComparisons=!state.tbShowComparisons; tbRender(); }
 // Legacy adjustment is ONLY for historical trade grades; do not change frozen league history.
 function historicalValueAdjustment(receivedValues,piecesGiven) {
@@ -3729,8 +3730,8 @@ function tradeBuilderHtml() {
       html += `<div class="tb-even-hint">Add value worth <b>${fmt(evenGap)}</b> to ${teamName(worstSide.t)} to even it out.</div>`;
     }
     // A distinct roster-fit perspective never changes market fairness.
-    html += `<div class="detail-title" style="margin-top:16px">Team-specific grades <span class="tb-meta">(estimated roster fit)</span></div>`;
-    parts.forEach(t => {
+    html += `<div class="detail-title" style="margin-top:16px">Team-specific grades <span class="tb-meta">(estimated roster fit)</span></div><button class="cancel-btn" aria-expanded="${!!state.tbTeamGradesExpanded}" onclick="tbToggleTeamGrades()">${state.tbTeamGradesExpanded ? 'Hide' : 'Show'} team-specific grades</button>`;
+    if (state.tbTeamGradesExpanded) parts.forEach(t => {
       const direction=(state.tbStrategies&&state.tbStrategies[t])||'auto';
       const fit=teamTradeFit(t,tb.assets,M,direction);
       html += `<div class="tb-side"><div class="tb-side-head">${teamName(t)} <span class="tb-grade ${tbGradeClass(fit.grade)}">${fit.grade}</span></div>
